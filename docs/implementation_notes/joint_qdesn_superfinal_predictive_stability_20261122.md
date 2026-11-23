@@ -64,3 +64,31 @@ be offered for one final coordinator integration.
 
 No intermediate branch is to be integrated. The coordinator should review
 only the final clean continuation branch after runtime closeout.
+
+## Final result
+
+All 15 supplemental chains completed without failure. The five AL chains
+retained 750 draws each; the ten exAL chains retained 1,500 draws each and
+used `M0_v_collapsed_support_logit`. Precision-repair jitter was at most
+`1e-12`. A foreground smoke attempt was externally terminated before atomic
+publication and produced no accepted artifact; worker 1 was subsequently
+rerun from its frozen seed in the persistent launch.
+
+Laplace joint exAL passed every predictive-functional gate after combining
+the original three and five fresh chains. Its DGP-integrated score mean moved
+from 0.3664 to 0.3615 while its median remained approximately 0.3585, with
+rank/folded R-hat 1.014/1.010 and relative MCSE 0.78%.
+
+Persistent-heavy-tail joint AL remained functionally unstable: its combined
+mean was 0.5897 versus median 0.5425, relative MCSE was 57%, and the largest
+draw contributed 8.3% of the total score. Joint exAL had stable mean influence
+but folded R-hat 1.156 exceeded the frozen 1.10 ceiling. The predeclared
+whole-scenario rule therefore retains all four persistent-heavy-tail parity
+rows. No draw was removed and no model-specific splicing occurred.
+
+The final packet has exactly 32 unique scenario-model rows, four models for
+each of eight scenarios, finite scores, and zero canonical contract crossings.
+The runtime finalizer reports
+`SUPERFINAL_PACKET_READY_FOR_INTEGRATION_REVIEW`. This is a scientific and
+reproducibility packet only; article assets, authoritative `main`, and
+Overleaf remain unchanged.

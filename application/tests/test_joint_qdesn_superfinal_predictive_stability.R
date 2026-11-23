@@ -35,6 +35,7 @@ stopifnot(
 
 prepare_body <- paste(deparse(app_joint_superfinal_prepare), collapse = "\n")
 final_body <- paste(deparse(app_joint_superfinal_finalize), collapse = "\n")
+closeout_body <- paste(deparse(app_joint_superfinal_closeout), collapse = "\n")
 stopifnot(
   grepl("source_binding.csv", prepare_body, fixed = TRUE),
   grepl("1500000000L", prepare_body, fixed = TRUE),
@@ -43,6 +44,8 @@ stopifnot(
   grepl("persistent_ok", final_body, fixed = TRUE),
   grepl("packet_complete", final_body, fixed = TRUE),
   grepl("M0_v_collapsed_support_logit", paste(deparse(
-    app_joint_superfinal_combined_draws), collapse = "\n"), fixed = TRUE)
+    app_joint_superfinal_combined_draws), collapse = "\n"), fixed = TRUE),
+  grepl("runtime_transfer_inventory.csv", closeout_body, fixed = TRUE),
+  grepl("READY_FOR_INTEGRATION", closeout_body, fixed = TRUE)
 )
 cat("Super-final predictive-stability tests passed.\n")

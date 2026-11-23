@@ -562,3 +562,134 @@ app_joint_superfinal_finalize <- function(source_root, root = app_joint_superfin
     packet = packet_path, final = final_path), filename = "final_manifest.csv")
   final
 }
+
+app_joint_superfinal_closeout <- function(source_root,
+    root = app_joint_superfinal_default_root(), repo_root = app_path()) {
+  source_root <- normalizePath(source_root, mustWork = TRUE)
+  root <- normalizePath(root, mustWork = TRUE)
+  repo_root <- normalizePath(repo_root, mustWork = TRUE)
+  final <- app_read_csv(file.path(root, "final_decision.csv"))
+  if (nrow(final) != 1L || final$status[[1L]] !=
+      "SUPERFINAL_PACKET_READY_FOR_INTEGRATION_REVIEW") {
+    stop("Super-final closeout requires a ready final decision.", call. = FALSE)
+  }
+  for (manifest in c("prepare_manifest.csv", "final_manifest.csv")) {
+    verified <- app_joint_shared_verify_manifest(root, file.path(root, manifest))
+    if (!nrow(verified) || any(!verified$verified)) {
+      stop(sprintf("Closeout cannot verify %s.", manifest), call. = FALSE)
+    }
+  }
+  mcmc_plan <- app_read_csv(file.path(root, "full_confirmation", "mcmc_worker_plan.csv"))
+  mcmc <- app_bind_rows_fill(lapply(mcmc_plan$worker_id, function(id) {
+    worker <- app_joint_swcf_worker_dir(root, "mcmc", id)
+    verified <- app_joint_shared_verify_manifest(worker,
+      file.path(worker, "artifact_manifest.csv"))
+    if (!nrow(verified) || any(!verified$verified) ||
+        !file.exists(file.path(worker, "DONE"))) {
+      stop(sprintf("MCMC worker %d fails closeout verification.", id), call. = FALSE)
+    }
+    app_read_csv(file.path(worker, "summary.csv"))
+  }))
+  scores <- app_bind_rows_fill(lapply(app_joint_superfinal_targets()$target_id,
+    function(id) {
+      worker <- app_joint_superfinal_score_dir(root, id)
+      verified <- app_joint_shared_verify_manifest(worker,
+        file.path(worker, "artifact_manifest.csv"))
+      if (!nrow(verified) || any(!verified$verified) ||
+          !file.exists(file.path(worker, "DONE"))) {
+        stop(sprintf("Score target %d fails closeout verification.", id), call. = FALSE)
+      }
+      app_read_csv(file.path(worker, "summary.csv"))
+    }))
+  if (nrow(mcmc) != 15L || nrow(scores) != 3L || any(!mcmc$finite_draws) ||
+      any(mcmc$likelihood_family == "exAL" &
+        mcmc$inference_method_id != "M0_v_collapsed_support_logit")) {
+    stop("Closeout worker summaries violate the frozen contract.", call. = FALSE)
+  }
+  contract <- app_read_csv(file.path(root, "superfinal_contract.csv"))
+  scores$relative_mcse <- scores$score_mcse_mean / scores$posterior_score_mean
+  scores$rank_rhat_pass <- scores$score_rank_rhat <=
+    app_joint_superfinal_value(contract, "score_rank_rhat_ceiling", TRUE)
+  scores$folded_rhat_pass <- scores$score_folded_rhat <=
+    app_joint_superfinal_value(contract, "score_folded_rhat_ceiling", TRUE)
+  scores$bulk_ess_pass <- scores$score_bulk_ess >=
+    app_joint_superfinal_value(contract, "score_bulk_ess_floor", TRUE)
+  scores$tail_ess_pass <- scores$score_tail_ess >=
+    app_joint_superfinal_value(contract, "score_tail_ess_floor", TRUE)
+  scores$relative_mcse_pass <- scores$relative_mcse <=
+    app_joint_superfinal_value(contract, "relative_mcse_ceiling", TRUE)
+  scores$leave_one_chain_pass <- scores$leave_one_chain_relative_range <=
+    app_joint_superfinal_value(contract,
+      "leave_one_chain_relative_range_ceiling", TRUE)
+  scores$max_draw_fraction_pass <- scores$max_draw_fraction <=
+    app_joint_superfinal_value(contract, "max_draw_fraction_ceiling", TRUE)
+  scores$crossing_pass <- scores$canonical_contract_crossing_pairs == 0L
+  source <- app_read_csv(file.path(root, "source_influence_audit.csv"))
+  before_after <- merge(source, scores, by = "model_cell_id", suffixes = c("_source", "_combined"))
+  decisions <- app_read_csv(file.path(root, "superfinal_scenario_decisions.csv"))
+  selected <- app_read_csv(file.path(root, "superfinal_selected_score_summary.csv"))
+  if (nrow(selected) != 32L || anyDuplicated(paste(selected$scenario_id,
+      selected$model_id, sep = "__")) || any(table(selected$scenario_id) != 4L)) {
+    stop("Selected packet is not a complete 8-by-4 scenario packet.", call. = FALSE)
+  }
+  out <- file.path(root, "integration_handoff")
+  app_ensure_dir(out)
+  git_value <- function(args) trimws(system2("git", c("-C", repo_root, args), stdout = TRUE))
+  branch <- git_value(c("branch", "--show-current"))
+  head <- git_value(c("rev-parse", "HEAD"))
+  upstream <- git_value(c("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
+  divergence <- as.integer(strsplit(git_value(c("rev-list", "--left-right", "--count",
+    "@{u}...HEAD")), "[[:space:]]+")[[1L]])
+  tracked_status <- git_value(c("status", "--porcelain", "--untracked-files=no"))
+  git_state <- data.frame(branch = branch, upstream = upstream, head = head,
+    upstream_behind = divergence[[1L]], upstream_ahead = divergence[[2L]],
+    tracked_worktree_clean = !length(tracked_status) || identical(tracked_status, ""),
+    stringsAsFactors = FALSE)
+  changed <- git_value(c("diff", "--name-status", "origin/main...HEAD"))
+  changed <- data.frame(entry = changed[nzchar(changed)], stringsAsFactors = FALSE)
+  commits <- git_value(c("log", "--format=%H%x09%s", "origin/main..HEAD"))
+  commits <- data.frame(entry = commits[nzchar(commits)], stringsAsFactors = FALSE)
+  health <- data.frame(stage = c("supplemental_mcmc", "combined_score", "selected_packet"),
+    expected = c(15L, 3L, 32L), completed = c(nrow(mcmc), nrow(scores), nrow(selected)),
+    failed = c(sum(!mcmc$finite_draws), 0L, 0L), remaining = c(0L, 0L, 0L),
+    stringsAsFactors = FALSE)
+  storage <- data.frame(runtime_root = root,
+    size_bytes = sum(file.info(list.files(root, recursive = TRUE, full.names = TRUE))$size,
+      na.rm = TRUE), source_root = source_root,
+    source_handoff_manifest_sha256 = app_sha256_file(
+      app_joint_superfinal_source_paths(source_root)$handoff_manifest),
+    stringsAsFactors = FALSE)
+  files <- c(
+    health = app_write_csv(health, file.path(out, "health_summary.csv")),
+    mcmc = app_write_csv(mcmc, file.path(out, "supplemental_mcmc_summary.csv")),
+    score = app_write_csv(scores, file.path(out, "combined_score_gate_summary.csv")),
+    comparison = app_write_csv(before_after, file.path(out, "source_vs_combined_score_audit.csv")),
+    decisions = app_write_csv(decisions, file.path(out, "scenario_decisions.csv")),
+    selected = app_write_csv(selected, file.path(out, "selected_32_row_packet.csv")),
+    git = app_write_csv(git_state, file.path(out, "git_state.csv")),
+    changed = app_write_csv(changed, file.path(out, "changed_files.csv")),
+    commits = app_write_csv(commits, file.path(out, "unique_commits.csv")),
+    storage = app_write_csv(storage, file.path(out, "storage_summary.csv")))
+  runtime_files <- list.files(root, recursive = TRUE, full.names = TRUE)
+  runtime_files <- runtime_files[!startsWith(runtime_files,
+    paste0(normalizePath(out, mustWork = TRUE), .Platform$file.sep))]
+  runtime_files <- runtime_files[file.info(runtime_files)$isdir %in% FALSE]
+  relative <- substring(runtime_files, nchar(root) + 2L)
+  inventory <- data.frame(relative_path = relative,
+    size_bytes = file.info(runtime_files)$size,
+    sha256 = unname(vapply(runtime_files, app_sha256_file, character(1L))),
+    stringsAsFactors = FALSE)
+  inventory <- inventory[order(inventory$relative_path), , drop = FALSE]
+  files <- c(files, inventory = app_write_csv(inventory,
+    file.path(out, "runtime_transfer_inventory.csv")))
+  decision <- data.frame(status = "READY_FOR_INTEGRATION", selected_rows = nrow(selected),
+    supplemental_mcmc_workers = nrow(mcmc), combined_score_targets = nrow(scores),
+    worker_failures = 0L, article_assets_modified = FALSE, main_modified = FALSE,
+    stringsAsFactors = FALSE)
+  files <- c(files, decision = app_write_csv(decision,
+    file.path(out, "handoff_decision.csv")))
+  app_joint_shared_write_manifest(out, files, filename = "handoff_manifest.csv")
+  verified <- app_joint_shared_verify_manifest(out, file.path(out, "handoff_manifest.csv"))
+  if (!all(verified$verified)) stop("Final handoff manifest failed.", call. = FALSE)
+  decision
+}

@@ -71,6 +71,12 @@ realized reservoir connectivity, zero realized recurrent radius, pathological
 recursive states, failed supercritical perturbation stability, protected-data
 use, or nonzero post-contract crossings in Q3.
 
+Exact historical controls are retained even when their frozen sparse matrices
+fail a new structural promotion gate. Such rows are labeled
+`reference_control_only`, remain visible for matched comparison, and cannot be
+selected as new challengers. This exception preserves the comparison target
+without weakening eligibility for any newly generated architecture.
+
 Convergence flags remain visible review diagnostics. They are not automatic
 rejection criteria when fitted/forecast quantile functionals and scores are
 stable. Any positive matched mean Q3 improvement over the exact v2 winner may

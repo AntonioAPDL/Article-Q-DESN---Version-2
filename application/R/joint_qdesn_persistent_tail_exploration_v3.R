@@ -937,11 +937,24 @@ app_joint_pht3_eligible <- function(x, contract, require_joint = FALSE) {
   x[keep, , drop = FALSE]
 }
 
+app_joint_pht3_has_source_id <- function(x) {
+  !is.na(x) & nzchar(trimws(as.character(x)))
+}
+
 app_joint_pht3_select_architectures <- function(x, n, stage, contract) {
-  x <- app_joint_pht3_eligible(x, contract, require_joint = identical(stage, "a3"))
-  x <- x[order(x$calibration_acrps_mean, x$calibration_acrps_worst,
-    x$calibration_acrps_sd, x$retained_state_budget, x$candidate_id), , drop = FALSE]
-  exact <- x[!is.na(x$source_candidate_id), , drop = FALSE]
+  all_x <- x
+  x <- app_joint_pht3_eligible(all_x, contract, require_joint = identical(stage, "a3"))
+  order_rows <- function(z) z[order(z$calibration_acrps_mean,
+    z$calibration_acrps_worst, z$calibration_acrps_sd,
+    z$retained_state_budget, z$candidate_id), , drop = FALSE]
+  x <- order_rows(x)
+  exact <- order_rows(all_x[app_joint_pht3_has_source_id(all_x$source_candidate_id) &
+    all_x$finite_fraction == 1 & all_x$protected_rows_loaded_max == 0L &
+    is.finite(all_x$calibration_acrps_mean) &
+    app_as_bool_vec(all_x$recursive_state_finite_all), , drop = FALSE])
+  exact$selection_eligibility <- ifelse(exact$candidate_id %in% x$candidate_id,
+    "eligible", "reference_control_only")
+  x$selection_eligibility <- "eligible"
   quota <- switch(stage,
     a1 = c(low_rho_high_alpha = 384L, compact_supercritical = 256L,
       heterogeneous_layered = 192L, global_compact = 96L),
@@ -958,8 +971,11 @@ app_joint_pht3_select_architectures <- function(x, n, stage, contract) {
   fill <- x[!x$candidate_id %in% selected$candidate_id, , drop = FALSE]
   selected <- head(app_bind_rows_fill(list(selected, fill)), n)
   if (nrow(selected) != n || anyDuplicated(selected$candidate_id) ||
-      !all(app_joint_pht3_exact_anchors(contract, app_joint_pht3_registry(contract))$source_candidate_id %in%
-        selected$source_candidate_id)) {
+      !all(app_joint_pht3_exact_anchors(contract,
+        app_joint_pht3_registry(contract))$source_candidate_id %in%
+        selected$source_candidate_id) ||
+      any(selected$selection_eligibility != "eligible" &
+        !app_joint_pht3_has_source_id(selected$source_candidate_id))) {
     stop(sprintf("V3 %s frontier violates cardinality or anchor preservation.", stage), call. = FALSE)
   }
   selected
@@ -1079,22 +1095,33 @@ app_joint_pht3_finalize_architecture <- function(root, stage) {
 
 app_joint_pht3_exact_source_ids <- function(root) {
   x <- app_read_csv(file.path(root, "candidate_registry.csv"))
-  as.character(x$source_candidate_id[!is.na(x$source_candidate_id)])
+  as.character(x$source_candidate_id[app_joint_pht3_has_source_id(x$source_candidate_id)])
 }
 
 app_joint_pht3_rank_distinct_profiles <- function(x, n, score,
   root, preserve_all_anchors = FALSE) {
   if (!score %in% names(x)) stop("V3 profile score column is absent.", call. = FALSE)
-  x <- x[is.finite(x[[score]]) & app_as_bool_vec(x$screening_eligible_all), , drop = FALSE]
-  x <- x[order(x[[score]], x$calibration_acrps_worst,
-    x$calibration_acrps_sd, x$retained_state_budget, x$candidate_id), , drop = FALSE]
-  best <- x[!duplicated(x$candidate_id), , drop = FALSE]
+  all_x <- x[is.finite(x[[score]]) & x$finite_fraction == 1 &
+    x$protected_rows_loaded_max == 0L &
+    app_as_bool_vec(x$recursive_state_finite_all), , drop = FALSE]
+  all_x <- all_x[order(all_x[[score]], all_x$calibration_acrps_worst,
+    all_x$calibration_acrps_sd, all_x$retained_state_budget,
+    all_x$candidate_id), , drop = FALSE]
+  eligible <- all_x[app_as_bool_vec(all_x$screening_eligible_all), , drop = FALSE]
+  eligible <- eligible[order(eligible[[score]], eligible$calibration_acrps_worst,
+    eligible$calibration_acrps_sd, eligible$retained_state_budget,
+    eligible$candidate_id), , drop = FALSE]
+  best <- eligible[!duplicated(eligible$candidate_id), , drop = FALSE]
   preserve <- if (preserve_all_anchors) app_joint_pht3_exact_source_ids(root) else
     c("persistent_heavy_tail__targeted_0001", "persistent_heavy_tail__targeted_0209")
-  controls <- best[best$source_candidate_id %in% preserve, , drop = FALSE]
+  controls <- all_x[all_x$source_candidate_id %in% preserve, , drop = FALSE]
+  controls <- controls[!duplicated(controls$candidate_id), , drop = FALSE]
   if (nrow(controls) != length(preserve)) {
     stop("V3 profile selection lost a required exact control.", call. = FALSE)
   }
+  controls$selection_eligibility <- ifelse(controls$candidate_id %in% best$candidate_id,
+    "eligible", "reference_control_only")
+  best$selection_eligibility <- "eligible"
   fill <- best[!best$candidate_id %in% controls$candidate_id, , drop = FALSE]
   selected <- head(app_bind_rows_fill(list(controls, fill)), n)
   if (nrow(selected) != n || anyDuplicated(selected$candidate_id)) {
@@ -1407,8 +1434,12 @@ app_joint_pht3_finalize_q3 <- function(root) {
   eligible <- eligible[order(eligible$calibration_acrps_mean,
     eligible$calibration_acrps_worst, eligible$calibration_acrps_sd), , drop = FALSE]
   challenger <- eligible[eligible$confirmation_role == "new_challenger", , drop = FALSE]
-  reference <- eligible[eligible$confirmation_role == "exact_v2_winner", , drop = FALSE]
-  authority <- eligible[eligible$confirmation_role == "exact_authority", , drop = FALSE]
+  controls <- aggregate[aggregate$confirmation_role %in%
+      c("exact_v2_winner", "exact_authority") & aggregate$finite_fraction == 1 &
+    aggregate$protected_rows_loaded_max == 0L &
+    app_as_bool_vec(aggregate$recursive_state_finite_all), , drop = FALSE]
+  reference <- controls[controls$confirmation_role == "exact_v2_winner", , drop = FALSE]
+  authority <- controls[controls$confirmation_role == "exact_authority", , drop = FALSE]
   if (!nrow(challenger) || nrow(reference) != 1L || nrow(authority) != 1L ||
       any(as.integer(scores$contract_crossing_pairs) != 0L) ||
       any(as.integer(scores$protected_rows_loaded) != 0L)) {

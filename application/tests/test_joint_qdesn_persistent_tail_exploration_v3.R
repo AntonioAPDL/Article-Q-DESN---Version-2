@@ -93,7 +93,26 @@ frontier <- app_joint_pht3_select_architectures(probe, 1024L, "a1", contract)
 stopifnot(
   nrow(frontier) == 1024L,
   !anyDuplicated(frontier$candidate_id),
+  length(app_joint_pht3_exact_source_ids(tmp)) == 5L,
   all(app_joint_pht3_exact_source_ids(tmp) %in% frontier$source_candidate_id)
+)
+
+reference_probe <- probe
+reference_id <- "persistent_heavy_tail__targeted_0209"
+reference_row <- reference_probe$source_candidate_id == reference_id &
+  !is.na(reference_probe$source_candidate_id)
+reference_probe$screening_eligible_all[reference_row] <- FALSE
+reference_probe$realized_connectivity_pass_all[reference_row] <- FALSE
+reference_frontier <- app_joint_pht3_select_architectures(
+  reference_probe, 1024L, "a1", contract)
+reference_selected <- reference_frontier$source_candidate_id == reference_id &
+  !is.na(reference_frontier$source_candidate_id)
+stopifnot(
+  sum(reference_selected) == 1L,
+  identical(reference_frontier$selection_eligibility[reference_selected],
+    "reference_control_only"),
+  !any(reference_frontier$selection_eligibility == "reference_control_only" &
+    !app_joint_pht3_has_source_id(reference_frontier$source_candidate_id))
 )
 
 profiles <- app_joint_pht3_prior_profiles(contract)

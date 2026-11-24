@@ -11,6 +11,10 @@ new fitting, tuning, posterior sampling, forecast generation or scientific
 rescoring. It does not change the independent single-quantile study, GloFAS or
 PriceFM authorities.
 
+Here v3 denotes the successor to the pure-DESN v2 article projection. It is
+not the September `joint_qdesn_corrected_v4` score-contract version, whose
+separate frozen numerical evidence remains checked as historical material.
+
 The exact selected CSV has SHA-256
 `69aced9bbd37ee506a382ed85a7fe2aba116ed296ae4285890540e572122f5f3`.
 The runtime inventory and handoff manifest remain bound by the scientific

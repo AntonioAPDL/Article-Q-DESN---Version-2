@@ -646,6 +646,10 @@ ESSENTIAL_VALIDATORS = (
     "application/tests/test_article_clarity_editorial_receipts_20261104.py",
     "application/tests/test_independent_forecast_editorial_manifest_20261031.R",
     "application/tests/run_tests.R",
+    "scripts/check_joint_qdesn_corrected_article_projection_v4.R",
+    "application/tests/test_joint_qdesn_corrected_article_projection_v4.R",
+    "application/tests/test_joint_qdesn_pure_desn_article_projection.R",
+    "application/tests/test_joint_qdesn_case_a_width_closure.R",
 )
 
 

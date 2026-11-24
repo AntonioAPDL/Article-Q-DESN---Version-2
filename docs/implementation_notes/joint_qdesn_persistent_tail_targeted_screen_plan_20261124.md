@@ -8,7 +8,7 @@ Base: freshly fetched `origin/main` at `ce54c280153723f97a2ad46dce33cedefbd8a505
 
 Execution host: Jerez only
 
-Status: v2 implementation and local worker probes verified; no v2 production worker launched
+Status: v2 campaign complete on Jerez; scientific review required before any confirmation campaign
 
 ## Scientific reason
 
@@ -147,3 +147,31 @@ mean improvement is eligible when every hard gate passes; it is not an article
 claim. Otherwise retain the corrected authority and close this experiment.
 Any later result must still receive protected VB and MCMC confirmation before
 article promotion.
+
+## Frozen v2 closeout
+
+The campaign completed on Jerez on 2026-11-24 under Git commit
+`fb55d748f96805f6bd1187ecf5e15592c69107ee`. All 8,076 realized jobs finished:
+4,608 R1a, 1,152 R1b, 288 R2, 1,656 H1, 300 H2, 24 M1, and 48 T1.
+There were zero worker failures, zero protected rows, and no automatic
+downstream launch. Every stage manifest verified.
+
+All 11 supercritical R2 aggregates passed the deterministic perturbation gate;
+the largest relative score change was 0.00700999 against the frozen 0.01
+limit. H1 selected 12 distinct architectures and seven coarse winners reached
+the lower `tau0` boundary, activating the predeclared outward H2 refinement.
+
+The internal winner is `persistent_heavy_tail__targeted_0209`: one layer, 24
+states, one response lag, `alpha = 0.9835177441`, `rho = 0.2030280668`, input
+scale 0.10, input sparsity 0.05, recurrent sparsity 0.005, and
+`tau0 = 1e-10`. Its three-level tail sentinel mean is 0.4287685 (fixture SD
+0.01173695), versus 0.5002208 (SD 0.06013054) for the exact authority. The
+component means are 0.2017227, 0.6491236, and 0.2151041 at tau 0.05, 0.50,
+and 0.95, respectively; authority values are 0.2107853, 0.7543242, and
+0.2814494.
+
+This is internal selector evidence only. It recommends a separately frozen
+seven-grid confirmation, but does not authorize exAL, joint fitting, MCMC,
+protected scoring, article replacement, integration, or Overleaf publication.
+The ignored Jerez runtime occupies approximately 359 MiB and must be retained
+until the confirmation decision and reproducibility handoff are reviewed.

@@ -102,3 +102,23 @@ publication from this handoff.
 
 The ignored runtime must remain on Jerez until a frozen scientific closeout is
 reviewed. Only reproducibility code and metadata belong in Git.
+
+## Completed execution receipt
+
+Jerez executed commit `fb55d748f96805f6bd1187ecf5e15592c69107ee` on 30
+distinct physical cores. The realized stage counts were 4,608 / 1,152 / 288 /
+1,656 / 300 / 24 / 48 for R1a / R1b / R2 / H1 / H2 / M1 / T1. All 8,076
+workers completed with zero failures and all stage manifests verified. No
+model worker or task tmux session remains active.
+
+The frozen internal decision recommends seven-grid confirmation for candidate
+`persistent_heavy_tail__targeted_0209` (`tau0 = 1e-10`): its
+`three_level_tail_sentinel_score` is 0.4287685 versus 0.5002208 for the exact
+authority, an internal mean improvement of 0.07145228. This is not protected
+or article-facing evidence. Runtime remains ignored at:
+
+`application/cache/joint_qdesn_persistent_tail_targeted_screen_v2_20261124`
+
+Retain that approximately 359 MiB directory. Do not launch seven-grid AL,
+exAL, joint VB, MCMC, protected scoring, integration, or publication without a
+new frozen confirmation contract.

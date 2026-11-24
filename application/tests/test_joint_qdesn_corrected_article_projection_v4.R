@@ -10,6 +10,7 @@ output <- system2(
 )
 status <- attr(output, "status")
 if (is.null(status)) status <- 0L
+if (as.integer(status) != 0L) stop(paste(c("Historical v4/current-authority admission failed:", output), collapse = "\n"), call. = FALSE)
 stopifnot(identical(as.integer(status), 0L))
 stopifnot(any(grepl(
   "JOINT_CORRECTED_ARTICLE_PROJECTION_V4_CHECK=PASS", output,

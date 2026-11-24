@@ -1,0 +1,54 @@
+% Deterministic projection of frozen corrected summaries.
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}lrr@{}}
+\toprule
+Simulation setting & Model & VB & MCMC \\
+\midrule
+Asymmetric-Laplace tail & MQ--DESN (AL) & 0.3690 [0.3677, 0.3704] & 0.3703 [0.3671, 0.3745] \\
+ & Q--DESN (AL) & 0.3684 [0.3667, 0.3703] & 0.3695 [0.3660, 0.3740] \\
+ & MQ--DESN (exAL) & 0.3710 [0.3705, 0.3717] & 0.3691 [0.3671, 0.3714] \\
+ & Q--DESN (exAL) & 0.3718 [0.3698, 0.3743] & 0.3701 [0.3667, 0.3746] \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & MQ--DESN (AL) & 0.4113 [0.4111, 0.4116] & 0.4118 [0.4111, 0.4129] \\
+ & Q--DESN (AL) & 0.4124 [0.4119, 0.4132] & 0.4134 [0.4121, 0.4158] \\
+ & MQ--DESN (exAL) & 0.4160 [0.4151, 0.4171] & 0.4143 [0.4125, 0.4168] \\
+ & Q--DESN (exAL) & 0.4170 [0.4153, 0.4191] & 0.4162 [0.4135, 0.4201] \\
+\addlinespace[2pt]
+Laplace innovations & MQ--DESN (AL) & 0.3580 [0.3577, 0.3585] & 0.3581 [0.3566, 0.3596] \\
+ & Q--DESN (AL) & 0.3574 [0.3570, 0.3578] & 0.3577 [0.3565, 0.3591] \\
+ & MQ--DESN (exAL) & 0.3605 [0.3600, 0.3609] & 0.3615 [0.3569, 0.3606] \\
+ & Q--DESN (exAL) & 0.3605 [0.3599, 0.3611] & 0.3589 [0.3573, 0.3606] \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & MQ--DESN (AL) & 0.4597 [0.4580, 0.4618] & 0.4609 [0.4566, 0.4668] \\
+ & Q--DESN (AL) & 0.4609 [0.4584, 0.4638] & 0.4621 [0.4574, 0.4685] \\
+ & MQ--DESN (exAL) & 0.4656 [0.4627, 0.4687] & 0.4613 [0.4573, 0.4672] \\
+ & Q--DESN (exAL) & 0.4658 [0.4626, 0.4698] & 0.4621 [0.4576, 0.4686] \\
+\addlinespace[2pt]
+Gaussian innovations & MQ--DESN (AL) & 0.3386 [0.3384, 0.3388] & 0.3389 [0.3380, 0.3399] \\
+ & Q--DESN (AL) & 0.3386 [0.3384, 0.3388] & 0.3388 [0.3380, 0.3399] \\
+ & MQ--DESN (exAL) & 0.3420 [0.3418, 0.3422] & 0.3407 [0.3389, 0.3427] \\
+ & Q--DESN (exAL) & 0.3421 [0.3419, 0.3424] & 0.3409 [0.3392, 0.3429] \\
+\addlinespace[2pt]
+Persistent heavy tails & MQ--DESN (AL) & 0.7387 [0.7247, 0.7527] & 0.7506 [0.7189, 0.7856] \\
+ & Q--DESN (AL) & 0.7057 [0.6881, 0.7243] & 0.7127 [0.6790, 0.7502] \\
+ & MQ--DESN (exAL) & 0.7279 [0.7156, 0.7409] & 0.7247 [0.6988, 0.7545] \\
+ & Q--DESN (exAL) & 0.7041 [0.6859, 0.7238] & 0.7038 [0.6706, 0.7388] \\
+\addlinespace[2pt]
+Regime shift & MQ--DESN (AL) & 0.4682 [0.4666, 0.4701] & 0.4682 [0.4650, 0.4731] \\
+ & Q--DESN (AL) & 0.4649 [0.4639, 0.4660] & 0.4650 [0.4636, 0.4673] \\
+ & MQ--DESN (exAL) & 0.4712 [0.4694, 0.4732] & 0.4688 [0.4658, 0.4730] \\
+ & Q--DESN (exAL) & 0.4678 [0.4663, 0.4698] & 0.4669 [0.4649, 0.4701] \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & MQ--DESN (AL) & 0.3969 [0.3965, 0.3973] & 0.3965 [0.3953, 0.3979] \\
+ & Q--DESN (AL) & 0.3963 [0.3959, 0.3966] & 0.3965 [0.3952, 0.3979] \\
+ & MQ--DESN (exAL) & 0.4026 [0.4021, 0.4030] & 0.3998 [0.3978, 0.4018] \\
+ & Q--DESN (exAL) & 0.4024 [0.4020, 0.4029] & 0.3997 [0.3978, 0.4018] \\
+\bottomrule
+\end{tabular}
+\caption{Oracle finite-grid \(\aCRPS\) under variational and MCMC inference for the same selected reservoir specification. Entries are means and equal-tailed 95\% intervals. Both condition on averaged future predictors. Joint VB additionally treats intercepts as point estimates.}
+\label{tab:joint-qdesn-corrected-v3-vb}
+\end{table}

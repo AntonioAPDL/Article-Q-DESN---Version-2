@@ -664,6 +664,7 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
         expect(not archived & (files | figures),
                "An approved archived display has returned as current compiled evidence")
     compression = compression_helper(root)
+    corrected_joint, _ = editorial.corrected_joint_authority(root)
     fit_wrapper = FIT_WRAPPER
     selected_joint_pdfs = set(JOINT_PDFS)
     essential = compression is not None and compression.role_summary(root)["version"] == 2
@@ -688,6 +689,16 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
             current_joint_tables.add(fit_wrapper)
             current_glofas_tables |= {compression.PREFIX + name + ".tex" for name in
                 ("glofas_specifications", "glofas_historical_scores", "glofas_diagnostics", "glofas_convergence")}
+    forecast_wrapper = FORECAST_WRAPPER
+    if corrected_joint is not None:
+        # Frozen overlay assets above remain fully checked. Only current
+        # consumers advance to the separately authenticated coherent packet.
+        current_joint_tables = {corrected_joint.FORECAST, corrected_joint.SCORES, corrected_joint.CROSSINGS}
+        selected_joint_pdfs = {corrected_joint.FORECAST_PDF}
+        forecast_wrapper = corrected_joint.FORECAST
+        superseded = {FORECAST_WRAPPER, compression.PREFIX + "mq_scores.tex",
+            "tables/appendix_essential_20261106_mq_crossings.tex"}
+        expect(not superseded & files, "Stale JOINT current projection remains selected")
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
@@ -720,7 +731,7 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
            "Current manuscript omits an authenticated historical display derivative")
     expect(selected_joint_pdfs | current_glofas_pdfs <= figures,
            "Effective selected aliases/wrappers do not select all authenticated MQ/GloFAS PDFs")
-    expect(FORECAST_WRAPPER in graphs["main.tex"].files and
+    expect(forecast_wrapper in graphs["main.tex"].files and
            (essential or fit_wrapper in graphs["qdesn-supplement.tex"].files),
            "MQ forecast belongs in main; retained or archived fit role must match the admitted layout")
     expect(MAIN_EDITORIAL_OVERRIDE in graphs["main.tex"].files and

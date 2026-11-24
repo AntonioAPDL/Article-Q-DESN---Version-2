@@ -42,6 +42,26 @@ def corrected_glofas_authority(root: Path):
     return reviewed, paths
 
 
+def corrected_joint_authority(root: Path):
+    """One reviewed numerical successor; historical derivatives stay pinned."""
+    marker = root / "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv"
+    selected = any("joint_qdesn_corrected_v3_" in re.sub(r"(?<!\\)%[^\n]*", "", (root / p).read_text())
+                   for p in ("main.tex", "qdesn-supplement.tex"))
+    if not marker.exists() and not selected:
+        return None, set()
+    helper = root / "scripts/joint_qdesn_corrected_article_authority_v3.py"
+    assert helper.is_file(), "Current JOINT authority validator is missing."
+    spec = importlib.util.spec_from_file_location("joint_v3_presentation_authority", helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        reviewed = module.admit(root)
+        paths = module.dependency_paths(root)
+    except (OSError, ValueError, KeyError) as error:
+        raise AssertionError(str(error)) from error
+    return module, paths
+
+
 def load_builder(root: Path):
     path = root / "scripts/build_qdesn_sections5_7_presentation.py"
     spec = importlib.util.spec_from_file_location("sections5_7_display_builder", path)
@@ -75,6 +95,8 @@ def dependency_paths(root: Path) -> set[str]:
             files.update(calibration["sources"])
             files.update("tables/" + path for path in calibration["outputs"])
     _, corrected_paths = corrected_glofas_authority(root)
+    files.update(corrected_paths)
+    _, corrected_paths = corrected_joint_authority(root)
     files.update(corrected_paths)
     path = root / "scripts/appendix_compression_validation_20261106.py"
     if path.is_file():
@@ -246,6 +268,7 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
                 assert builder.table_rows((root / source).read_text()) == builder.table_rows((root / output).read_text())
     if effective:
         corrected_glofas, _ = corrected_glofas_authority(root)
+        corrected_joint, corrected_joint_paths = corrected_joint_authority(root)
         current_glofas_aliases = corrected_glofas["active_aliases"] if corrected_glofas else {}
         superseded_glofas_paths = set()
         for document, override, aliases in (("main.tex", builder.MAIN_OVERRIDE, builder.MAIN_ALIASES),
@@ -264,6 +287,10 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
         supplement = (root / "qdesn-supplement.tex").read_text()
         ind_revision = (root / "application/config/independent_forecast_300_500_v1.json").exists()
         for role in ("independent_forecast", "mq_forecast"):
+            if role == "mq_forecast" and corrected_joint is not None:
+                assert r"\input{" + corrected_joint.FORECAST + "}" in main, "Stale effective current JOINT forecast wrapper."
+                assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" not in main, "Historical JOINT wrapper remains selected."
+                continue
             if role == "independent_forecast" and ind_revision:
                 receipt = json.loads((root / "tables/independent_forecast_300_500_article_manifest_v1.json").read_text())
                 assert receipt["primary_cutoff"] == 300 and receipt["sensitivity_cutoff"] == 500
@@ -322,8 +349,12 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
         upload = set((root / "overleaf/article_files.txt").read_text().splitlines())
         active_entries = (entry for role, entry in entries.items()
                           if not (ind_revision and role == "independent_forecast") and
+                          not (corrected_joint is not None and role.startswith("mq_")) and
                           not (role.startswith("glofas_") and entry["file"] in superseded_glofas_paths))
         assert set(entry["file"] for entry in active_entries) | {builder.MANIFEST} <= upload, "An active derivative is absent from the upload inventory."
+        if corrected_joint is not None:
+            article_assets = corrected_joint.assets(root) | {corrected_joint.MANIFEST}
+            assert article_assets <= upload, "A current JOINT asset is absent from the upload inventory."
         if corrected_glofas:
             authority_file = "tables/glofas_hybrid_current_authority.json"
             manifest_path = corrected_glofas["asset_manifest"]["relative_path"]

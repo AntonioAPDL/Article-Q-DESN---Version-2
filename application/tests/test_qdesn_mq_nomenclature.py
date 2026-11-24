@@ -121,6 +121,9 @@ class MQNomenclatureTest(unittest.TestCase):
         if (self.root / "tables/appendix_essential_20261106_contract.json").exists():
             displays = ("tables/appendix_compact_20261106_mq_scores.tex",
                         "tables/appendix_essential_20261106_mq_crossings.tex")
+        if (self.root / "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv").exists():
+            displays = ("tables/joint_qdesn_corrected_v3_compact_scores.tex",
+                        "tables/joint_qdesn_corrected_v3_compact_crossings.tex")
         for relative in displays:
             with self.subTest(relative=relative):
                 path = self.root / "qdesn-supplement.tex"
@@ -140,7 +143,7 @@ class MQNomenclatureTest(unittest.TestCase):
         path = self.root / "qdesn-supplement.tex"
         path.write_text(path.read_text() + "\n\\input{tables/appendix_compact_20261106_mq_fit_rmse.tex}\n")
         self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
-        with self.assertRaisesRegex(CHECKER.CheckError, "archived|Archived|not selected|forbidden"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "archived|Archived|not selected|forbidden|Source-inferred inputs absent from allowlist: .*joint_qdesn_pure_desn_v2_mq_fit_oracle_rmse\\.pdf"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_archived_role_cannot_be_forged_into_current_evidence(self):
@@ -203,7 +206,10 @@ class MQNomenclatureTest(unittest.TestCase):
                              builder.table_rows(CHECKER.read(self.root, output)))
 
     def test_superseded_mq_table_cannot_replace_caption_derivative(self):
-        if (self.root / "tables/appendix_essential_20261106_contract.json").exists():
+        if (self.root / "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv").exists():
+            source, output = ("tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex",
+                              "tables/joint_qdesn_corrected_v3_compact_crossings.tex")
+        elif (self.root / "tables/appendix_essential_20261106_contract.json").exists():
             source, output = ("tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex",
                               "tables/appendix_essential_20261106_mq_crossings.tex")
         else:
@@ -230,7 +236,7 @@ class MQNomenclatureTest(unittest.TestCase):
         entry = next(r for r in receipt["outputs"] if r["file"] == relative)
         entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         manifest_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows|copied (?:fixture current|essential) source differs: tables/qdesn_multiquantile_score_display.tex"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows|copied (?:fixture current|essential) source differs: tables/(?:qdesn_multiquantile_score_display.tex|qdesn_sections5_7_presentation_manifest.json)"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_historical_unverified_target_table_cannot_return_as_current_evidence(self):
@@ -310,6 +316,8 @@ class MQNomenclatureTest(unittest.TestCase):
         path = self.root / "main.tex"
         text = path.read_text()
         needle = "tables/qdesn_multiquantile_forecast_figure_display.tex"
+        if (self.root / "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv").exists():
+            needle = "tables/joint_qdesn_corrected_v3_forecast_figure.tex"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", 1))
         self.refresh_ind_manuscript_receipt("main.tex")

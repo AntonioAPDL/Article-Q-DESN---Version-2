@@ -109,6 +109,20 @@ local({
     "whereas MQ--DESN leads for Gaussian and asymmetric-tail dynamics.")
   descriptive <- "The descriptive MQ--DESN-minus-Q--DESN intervals"
   overlap <- "the other fourteen include zero."
+  if (file.exists(file.path(root, "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv"))) {
+    # Historical Case A numerical/width evidence above stays unchanged.
+    # Current wording follows the separately authenticated whole v3 packet,
+    # not the superseded two-winner or paired-difference v2 interpretation.
+    output <- system2(file.path(R.home("bin"), "Rscript"),
+      c(shQuote(file.path(root, "scripts/check_joint_qdesn_corrected_article_projection_v3.R")),
+        "--repo-root", shQuote(root)), stdout = TRUE, stderr = TRUE)
+    stopifnot(is.null(attr(output, "status")),
+      any(startsWith(output, "JOINT_CORRECTED_ARTICLE_PROJECTION_V3_CHECK=PASS")))
+    heterogeneous <- paste("MQ--DESN under exAL has the lowest mean for asymmetric tails,",
+      "while MQ--DESN under AL is lowest for Gaussian-mixture and nonlinear-reservoir dynamics.")
+    descriptive <- "Within a likelihood, MQ--DESN has a lower mean score in six of the sixteen comparisons"
+    overlap <- "all sixteen pairs of marginal intervals overlap."
+  }
   current_wording <- function(main, supplement) {
     c(conditional_interval_scope = grepl(conditional, main, fixed = TRUE),
       no_general_superiority_claim = grepl(replication, main, fixed = TRUE) &&

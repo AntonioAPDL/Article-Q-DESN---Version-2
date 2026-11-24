@@ -32,6 +32,11 @@ def uncomment(source: str) -> str:
 
 def classification(path: str) -> tuple[str, str, str, str]:
     suffix = Path(path).suffix
+    if "joint_qdesn_corrected_v3_" in path:
+        return ("corrected multiquantile article projection/companion",
+                "November 23 corrected AL-kernel complete selected packet; 32 MCMC and 32 matched VB cells",
+                "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv;tables/joint_qdesn_corrected_v3_projection_provenance.csv",
+                "1300 fitting observations; conditional averaged-future-feature oracle aCRPS; complete scenario-level parity fallback; 3-chain base and 8-chain Laplace MQ-exAL primary; matched path sensitivity excludes that unmatched probe")
     if path == "tables/glofas_final_scientific_acceptance_receipt_20261108.json":
         return ("final GloFAS scientific-acceptance receipt",
                 "accepted Search III Parts 1--3 and coherent October Part 4 composition",

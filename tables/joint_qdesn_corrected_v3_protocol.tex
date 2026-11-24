@@ -1,0 +1,21 @@
+% Deterministic projection of frozen corrected summaries.
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Quantity & Specification \\
+\midrule
+Fitting sample & 1,300 observations (full times 9,701--11,000) \\
+Internal selection & 1,000 fitting and 300 validation observations \\
+Forecast assessment & 33 origins, 30 horizons, 990 common pairs \\
+Probability levels & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95 \\
+MCMC & Three chains; 750 AL or 1,500 exAL draws per chain \\
+Laplace MQ--DESN (exAL) & Eight chains, 12,000 primary score draws \\
+\bottomrule
+\end{tabular}
+\caption{Multiquantile simulation design and retained MCMC draws. All four regression classes share one selected reservoir specification within each mechanism. The persistent-heavy-tail comparison retains its complete reference specification after the alternative failed the predefined functional-stability criterion.}
+\label{tab:joint-qdesn-pure-desn-v2-protocol}
+\end{table}

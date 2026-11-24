@@ -156,7 +156,8 @@ pure_desn_reader_inputs <- c(
   "\\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}",
   "\\input{tables/joint_qdesn_pro_review_forecast_figure.tex}",
   "\\input{tables/joint_qdesn_pure_desn_v2_forecast_figure.tex}",
-  "\\input{tables/qdesn_multiquantile_forecast_figure_display.tex}"
+  "\\input{tables/qdesn_multiquantile_forecast_figure_display.tex}",
+  "\\input{tables/joint_qdesn_corrected_v3_forecast_figure.tex}"
 )
 pure_desn_reader_present <- vapply(pure_desn_reader_inputs,
   function(path) grepl(path, main, fixed = TRUE), logical(1L))
@@ -174,8 +175,10 @@ expect(!pure_desn_active || !old_reader_active,
 # projection: the historical projection remains checked independently below.
 if (pure_desn_active) {
   pure_desn_v2_active <- any(pure_desn_reader_present[c(3L, 4L)])
+  corrected_v3_active <- pure_desn_reader_present[[5L]]
   active_checker <- file.path(
-    repo_root, if (pure_desn_v2_active)
+    repo_root, if (corrected_v3_active)
+      "scripts/check_joint_qdesn_corrected_article_projection_v3.R" else if (pure_desn_v2_active)
       "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R" else
       "scripts/check_joint_qdesn_pure_desn_article_projection.R"
   )
@@ -191,7 +194,8 @@ if (pure_desn_active) {
                collapse = "\n"), call. = FALSE)
   }
   expect(any(grepl(
-    if (pure_desn_v2_active) "^JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS " else
+    if (corrected_v3_active) "^JOINT_CORRECTED_ARTICLE_PROJECTION_V3_CHECK=PASS " else if (pure_desn_v2_active)
+      "^JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS " else
       "^JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS ",
     current_output
   )), "Current JOINT article checker did not emit its validated success marker.")
@@ -311,6 +315,6 @@ cat(paste0(
   "JOINT_CORRECTED_ARTICLE_PROJECTION_V4_CHECK=PASS ",
   "retained_historical_scientific_checks=PASS ",
   "retained_historical_assets=17 active_reader=",
-  if (pure_desn_active) if (pure_desn_v2_active) "pure_desn_v2" else "pure_desn_v1" else "corrected_v4",
+  if (pure_desn_active) if (corrected_v3_active) "corrected_v3" else if (pure_desn_v2_active) "pure_desn_v2" else "pure_desn_v1" else "corrected_v4",
   " historical_score_cells=32 historical_contrasts=16\n"
 ))

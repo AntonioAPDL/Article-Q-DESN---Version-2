@@ -486,6 +486,9 @@ def dependency_paths(root):
     paths.update(VALIDATORS + (DISPOSITION, ARCHIVE, "overleaf/article_files.txt", LEGACY_RECEIPT, PRESENTATION))
     builder = module(root, BUILDER, "compression_fixture_builder_dependencies")
     paths.update(builder.SOURCE_SHA256)
+    # Historical derivatives stay required even when a new scientific
+    # projection deliberately removes them from the active upload inventory.
+    paths.update(REQUIRED_DISPLAYS + REQUIRED_FIGURES + REQUIRED_EXTRA_EVIDENCE)
     if (Path(root) / MANIFEST).is_file():
         paths.add(MANIFEST)
     return paths
@@ -643,6 +646,10 @@ ESSENTIAL_VALIDATORS = (
     "application/tests/test_article_clarity_editorial_receipts_20261104.py",
     "application/tests/test_independent_forecast_editorial_manifest_20261031.R",
     "application/tests/run_tests.R",
+    "scripts/check_joint_qdesn_corrected_article_projection_v4.R",
+    "application/tests/test_joint_qdesn_corrected_article_projection_v4.R",
+    "application/tests/test_joint_qdesn_pure_desn_article_projection.R",
+    "application/tests/test_joint_qdesn_case_a_width_closure.R",
 )
 
 
@@ -661,6 +668,33 @@ def essential_contract(root):
             contract.get("baseline_commit") == ESSENTIAL_BASELINE and
             contract.get("variant") == "default-full-32-cell-sensitivity",
             "unknown or partial essential layout marker")
+    return contract
+
+
+def joint_article_successor(root):
+    """Admit one exact scientific successor without rewriting old contracts."""
+    path = "scripts/joint_qdesn_corrected_article_authority_v3.py"
+    selected = any("joint_qdesn_corrected_v3_" in uncomment(regular(root, p).decode())
+                   for p in ("main.tex", "qdesn-supplement.tex"))
+    marker = (Path(root) / "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv").exists()
+    if not selected and not marker:
+        return None
+    require((Path(root) / path).is_file(), "current JOINT authority checker missing")
+    helper = module(root, path, "essential_joint_article_successor")
+    try:
+        return helper, helper.admit(root)
+    except (OSError, ValueError, KeyError) as error:
+        raise CompressionError(str(error)) from error
+
+
+def essential_effective_contract(root, contract=None):
+    """Only two printed roles advance; the approved v2 contract stays fixed."""
+    contract = copy.deepcopy(contract or essential_contract(root))
+    successor = joint_article_successor(root)
+    if successor is not None:
+        for role in contract["roles"]:
+            if role["role"] in successor[1]["roles"]:
+                role["destination"] = successor[1]["roles"][role["role"]]
     return contract
 
 
@@ -730,7 +764,7 @@ def _visible_tex(root, routes):
 
 
 def essential_route_checks(root, contract=None):
-    contract = contract or essential_contract(root)
+    contract = essential_effective_contract(root, contract)
     authority=module(root,"scripts/glofas_current_article_authority.py","essential_inline_visibility")
     routes, visible = route_inventory(root), visible_routes(root)
     selected = _visible_tex(root, visible)
@@ -833,9 +867,17 @@ def essential_semantic_checks(main, supplement, bibliography):
     checks["glofas_source_families"] = all(x in em.replace("{,}","") for x in (
         "12455", "13883", r"a_c+3n_c/2", r"\sigma_c^2", r"a_c+n_c/2")) and r"\frac{D_\gamma^2}{B_\gamma}" in em
     checks["random_design_covariances"] = all(x in em for x in (r"\matJ_i\matV\vecte_h",r"\matJ_i\matV\matJ_i^\top")) and "covariance" in plain(e).lower()
-    checks["mixing_and_exceptions"] = ("mixing" in p and "score" in p and
-        "all four exceptions occur under persistent-heavy-tail dynamics" in p and "28 of 32" in p and "0.7364" in p and
-        not re.search(r"(?:all|every)[^.]{0,90}intervals?[^.]{0,50}(?:widen|wider)", p))
+    if "tables/joint_qdesn_corrected_v3_forecast_figure.tex" in uncomment(main):
+        # Current sensitivity uses its own matched-draw ledger. The exact
+        # frozen 28/32 historical finding remains in archived v2 evidence.
+        checks["mixing_and_exceptions"] = ("mixing" in p and "score" in p and
+            "31" in p and "laplace" in p and "eight" in p and
+            "three" in p and "trajectory" in p and "0.4491" in p and
+            not re.search(r"(?:all|every)[^.]{0,90}intervals?[^.]{0,50}(?:widen|wider)", p))
+    else:
+        checks["mixing_and_exceptions"] = ("mixing" in p and "score" in p and
+            "all four exceptions occur under persistent-heavy-tail dynamics" in p and "28 of 32" in p and "0.7364" in p and
+            not re.search(r"(?:all|every)[^.]{0,90}intervals?[^.]{0,50}(?:widen|wider)", p))
     label=r"\label{subsec:supp-independent-metrics}"
     require(supplement.count(label)==1,"one local independent computation/uncertainty account required")
     dependence=plain(supplement.split(label,1)[1].split(r"\subsection",1)[0])
@@ -894,6 +936,9 @@ def essential_dependency_paths(root):
     paths.update(builder.build_outputs(Path(root)))
     if (Path(root) / ESSENTIAL_MANIFEST).is_file():
         paths.add(ESSENTIAL_MANIFEST)
+    successor = joint_article_successor(root)
+    if successor is not None:
+        paths.update(successor[0].dependency_paths(root))
     return paths
 
 
@@ -924,16 +969,23 @@ def essential_prepare(root):
         approved_contract_sha256=ESSENTIAL_CONTRACT_SHA, variant=contract["variant"],
         original_legacy_receipt_sha256=ESSENTIAL_LEGACY_SHA, original_legacy_receipt=baseline,
         current_source_sha256=hashes, protected_source_sha256=protected,
-        actual_input_routes=routes, roles={r["role"]:r for r in contract["roles"]},
+        actual_input_routes=routes, roles={r["role"]:r for r in essential_effective_contract(root, contract)["roles"]},
         semantic_checks=sorted(semantics), derivative_checks=derivatives,
         scientific_values_changed=False, scientific_outputs_regenerated=False,
         fits_launched=0, forecasts_launched=0, scores_recomputed=0,
         source_ancestry_authenticated=True,
         fixture_policy="explicit_python_api_only_not_publication_no_missing_git_fallback")
+    successor = joint_article_successor(root)
+    if successor is not None:
+        # The zero-run counters above describe this appendix projection, not
+        # equality of the newly admitted scientific packet with old scores.
+        result["scientific_authority_successor"] = successor[1]
     if (root / ESSENTIAL_MANIFEST).exists():
         previous = decode(regular(root, ESSENTIAL_MANIFEST))
         mutable = {"current_source_sha256", "semantic_checks", "actual_input_routes",
                    "approved_contract_sha256", "roles"}
+        if successor is not None and "scientific_authority_successor" not in previous:
+            previous["scientific_authority_successor"] = successor[1]
         require(previous.keys() == result.keys() and all(previous[k] == result[k] for k in result if k not in mutable),
                 "essential immutable roles, scientific scope or fixed historical pins changed")
     legacy = essential_legacy(current, baseline, hashes)
@@ -991,6 +1043,12 @@ def essential_portable_checks(root):
         all(manifest.get(k) == 0 for k in ("fits_launched","forecasts_launched","scores_recomputed")),
         "copied fixture requires admitted essential metadata")
     require(manifest.get("current_source_sha256") and manifest.get("protected_source_sha256"), "nonempty copied fixture inventories required")
+    successor = joint_article_successor(root)
+    if successor is not None:
+        require(manifest.get("scientific_authority_successor") == successor[1],
+                "copied current JOINT successor identity differs")
+    else:
+        require("scientific_authority_successor" not in manifest, "current JOINT successor cannot disappear")
     # Copied fixtures do not assert a repository-wide scientific inventory.
     # Its fixed-ancestor pins are authenticated only by full Git admission.
     for path,digest in manifest["current_source_sha256"].items():
@@ -1029,7 +1087,7 @@ def role_summary(root, admitted=None):
     essential_contract(root)
     record=decode(regular(root,ESSENTIAL_MANIFEST))
     require(record.get("schema") == ESSENTIAL_SCHEMA and record.get("roles") ==
-            {r["role"]:r for r in essential_contract(root)["roles"]},"admitted role summary differs from fixed contract")
+            {r["role"]:r for r in essential_effective_contract(root)["roles"]},"admitted role summary differs from fixed contract and exact scientific successor")
     for path,digest in record["current_source_sha256"].items():
         require(sha(regular(root,path)) == digest, "role summary current source changed: " + path)
     return dict(version=2,schema=ESSENTIAL_SCHEMA,variant=record["variant"],manifest=ESSENTIAL_MANIFEST,

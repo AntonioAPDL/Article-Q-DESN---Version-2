@@ -37,9 +37,11 @@ local({
     env <- new.env(parent = globalenv())
     env$commandArgs <- function(...) paste0("--file=", historical)
     env$system2 <- function(command, args, ...) {
-      if (any(grepl("check_joint_qdesn_pure_desn_article_projection", args, fixed = TRUE))) {
+      if (any(grepl("check_joint_qdesn_pure_desn_article_projection|check_joint_qdesn_corrected_article_projection_v3", args))) {
         if (failure == "nonzero_with_marker") {
-          return(structure("JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS mocked", status = 1L))
+          marker <- if (file.exists(file.path(root, "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv")))
+            "JOINT_CORRECTED_ARTICLE_PROJECTION_V3_CHECK=PASS mocked" else "JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS mocked"
+          return(structure(marker, status = 1L))
         }
         return("No current validation receipt")
       }

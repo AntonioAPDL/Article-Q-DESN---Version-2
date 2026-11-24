@@ -94,6 +94,10 @@ local({
   }, expected_failure = "Frozen Laplace contrast percentiles are distinguished from score and historical percentile conventions")
   # Complete-article mutations additionally prove that numerical checks alone
   # cannot authorize a stale asset receipt or historical Overleaf projection.
+  current_v3 <- file.exists(file.path(root,
+    "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv"))
+  mq_mutations <- 0L
+  if (!current_v3) {
   manifest_path <- "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv"
   manifest <- read.csv(file.path(root, manifest_path), stringsAsFactors = FALSE)
   allowlist <- trimws(readLines(file.path(root, "overleaf/article_files.txt"), warn = FALSE))
@@ -317,6 +321,12 @@ local({
     }, "Forecast figure remains in main and fitting figure in supplement")
     after_mq <- run(pristine)
     stopifnot(after_mq$status == 0L, any(startsWith(after_mq$output, marker)))
+  }
+  } else {
+    # run(root) authenticated current v3 above, then all 13 historical
+    # numerical mutations ran unchanged. Dedicated v3 tests now own the
+    # live-route/asset mutations, rather than asserting stale v2 authority.
+    cat("V2_CURRENT_ROUTE_MUTATIONS_SUPERSEDED_BY_AUTHENTICATED_V3_TESTS\n")
   }
   cat(paste(receipt, collapse = "\n"), "\n")
   cat(sprintf("test_joint_qdesn_pure_desn_article_projection_v2: PASS mutations=%d runtime_reads=0\n",

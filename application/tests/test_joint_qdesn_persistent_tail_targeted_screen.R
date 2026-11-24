@@ -103,6 +103,12 @@ stopifnot(
 stopifnot(abs(app_joint_pht_tail_sentinel_score(c(1, 2, 3)) - 4) < 1e-12)
 invalid_tail <- try(app_joint_pht_tail_sentinel_score(c(1, 2)), silent = TRUE)
 stopifnot(inherits(invalid_tail, "try-error"))
+target_source <- paste(readLines(file.path(repo_root, "application/R",
+  "joint_qdesn_persistent_tail_targeted_screen.R"), warn = FALSE), collapse = "\n")
+stopifnot(
+  grepl("three_level_tail_sentinel_score_mean", target_source, fixed = TRUE),
+  grepl("score_label = \"three_level_tail_sentinel_score\"", target_source, fixed = TRUE)
+)
 
 launcher <- paste(readLines(file.path(repo_root, "application/scripts",
   "launch_joint_qdesn_persistent_tail_targeted_stage.sh"), warn = FALSE), collapse = "\n")

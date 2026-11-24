@@ -13,7 +13,7 @@ app_joint_pht_source_constants <- function() {
     extension_manifest = paste0("docs/reproducibility/",
       "joint_qdesn_persistent_tail_targeted_screen_sources_20261124.csv"),
     extension_manifest_sha256 =
-      "5aa8a67a4e8938979d2a0966821b058231cc2d834ae03d049a80afadfd0f56b5",
+      "c0ea49b1f0f7446681f0c63bfd52d36146b179ac93c6be607ddd430c28d0e306",
     scopes = c("application/R", "application/config", "application/scripts",
       "application/cpp", "validation")
   )

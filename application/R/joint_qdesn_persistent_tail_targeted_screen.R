@@ -768,8 +768,15 @@ app_joint_pht_finalize_tail <- function(root) {
   proxy$calibration_acrps_mean <- proxy$three_level_tail_sentinel_score
   aggregate <- app_joint_sw_attach_candidate_metadata(root,
     app_joint_sw_aggregate_scores(proxy, c("scenario_id", "candidate_id", "rhs_tau0")))
-  aggregate <- aggregate[order(aggregate$calibration_acrps_mean,
-    aggregate$calibration_acrps_worst, aggregate$calibration_acrps_sd,
+  names(aggregate)[names(aggregate) == "calibration_acrps_mean"] <-
+    "three_level_tail_sentinel_score_mean"
+  names(aggregate)[names(aggregate) == "calibration_acrps_worst"] <-
+    "three_level_tail_sentinel_score_worst"
+  names(aggregate)[names(aggregate) == "calibration_acrps_sd"] <-
+    "three_level_tail_sentinel_score_sd"
+  aggregate <- aggregate[order(aggregate$three_level_tail_sentinel_score_mean,
+    aggregate$three_level_tail_sentinel_score_worst,
+    aggregate$three_level_tail_sentinel_score_sd,
     aggregate$candidate_id), , drop = FALSE]
   aggregate$tail_sentinel_rank <- seq_len(nrow(aggregate))
   best <- aggregate[1L, , drop = FALSE]
@@ -781,7 +788,8 @@ app_joint_pht_finalize_tail <- function(root) {
     stop("Tail sentinel closeout failed authority, cardinality, finiteness, or protection gates.",
       call. = FALSE)
   }
-  improvement <- authority$calibration_acrps_mean[[1L]] - best$calibration_acrps_mean[[1L]]
+  improvement <- authority$three_level_tail_sentinel_score_mean[[1L]] -
+    best$three_level_tail_sentinel_score_mean[[1L]]
   files <- c(
     worker_scores = app_write_csv(all_scores, file.path(root, "tail_sentinel_worker_scores.csv")),
     replicate_scores = app_write_csv(replicate_scores,
@@ -792,8 +800,8 @@ app_joint_pht_finalize_tail <- function(root) {
     status = "THREE_LEVEL_TAIL_SENTINEL_COMPLETE_STOP_FOR_SCIENTIFIC_REVIEW",
     score_label = "three_level_tail_sentinel_score",
     best_candidate_id = best$candidate_id[[1L]], best_rhs_tau0 = best$rhs_tau0[[1L]],
-    best_score = best$calibration_acrps_mean[[1L]],
-    authority_score = authority$calibration_acrps_mean[[1L]],
+    best_score = best$three_level_tail_sentinel_score_mean[[1L]],
+    authority_score = authority$three_level_tail_sentinel_score_mean[[1L]],
     mean_improvement = improvement,
     recommend_seven_grid_confirmation = is.finite(improvement) &&
       improvement > target$minimum_mean_improvement,

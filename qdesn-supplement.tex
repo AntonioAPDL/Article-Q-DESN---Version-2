@@ -842,11 +842,18 @@ The single-level study retains criterion-specific specifications and
 historical forecast-guided refinements: configurations with lower forecast
 MAE or check loss on the evaluation series were retained. Its metric
 summaries are not an untouched-test assessment of selection.
-The multiquantile comparison initially averages performance over three
-separately simulated calibration series per mechanism. The Laplace
-specification was further refined on additional realizations, excluding
-the final evaluation series from candidate selection. That series had
-previously been examined. One DESN/RHS specification is common to all
+The multiquantile comparison screens reservoir and RHS specifications on
+separately simulated development series, using 1,000 fitting observations
+and 300 subsequent observations for recursive forecast assessment. The
+final evaluation series is excluded from this screening, although it
+had been examined in earlier analyses. This screening includes the RHS
+hyperprior scale \(\tau_0\). A candidate and a reference specification
+are then compared on the evaluation series. The candidate is retained only
+if at least one mean oracle score improves, none increases by more than
+1\%, and the score-stability checks pass. Otherwise, the complete
+four-regression reference comparison is retained, as for persistent
+heavy-tail dynamics. The reported scores therefore follow evaluation-based
+specification review, not an untouched-test design. One DESN/RHS specification is common to all
 four regressions within each mechanism; the readout comprises all reservoir
 layers and an intercept, without separate response-lag regressors.
 
@@ -886,11 +893,16 @@ uses 4,000 aligned draws per chain, except for Gaussian AL Q--DESN at
 \(p=0.05\), whose forecast MAE and check loss use 1,000 per chain.
 The selected VB fits allow at most 300 iterations. Recorded times include
 forecasting and metric preparation rather than isolated fitting time.
-The multiquantile comparison uses five chains: AL runs for 4,000
-iterations with 1,000 discarded and retains every fourth draw, giving
-3,750 pooled draws; exAL runs for 8,000 with 2,000 discarded and retains
-7,500. Its scores use 3,750 draws except for both Laplace exAL regressions,
-which use all 7,500.
+The multiquantile comparison uses three chains per regression. AL runs
+for 2,000 iterations with 500 discarded and retains every second draw,
+giving 2,250 pooled draws. ExAL runs for 4,000 iterations with 1,000
+discarded and retains every second draw, giving 4,500 pooled draws.
+Laplace MQ--DESN under exAL uses five additional chains, for 12,000
+retained draws in its primary score summary. The fitting window contains
+1,300 observations for every regression, and the parameter posterior is
+held fixed across the 33 forecast origins. VB forecast summaries use 2,000
+draws. Recursive-path sensitivity uses subsets of 120 MCMC draws or 40 VB
+draws per regression.
 
 For the multiquantile comparison, Gaussian-reference prior calibration is
 fixed before sampling and shared across regressions and chains. With
@@ -899,7 +911,7 @@ fixed before sampling and shared across regressions and chains. With
 \begin{aligned}
 \text{Reference scale:}\quad&s_G=\sqrt{\E_{q_G}(\sigma_G^2)},\\
 \text{Intercept prior:}\quad&b_{0k}=\E_{q_G}(\beta_{0G})+s_G\Phi^{-1}(p_k),
-\qquad V_{0k}=(2s_G)^2.
+\qquad V_{0k}=(4s_G)^2.
 \end{aligned}
 \label{eq:supp-joint-intercept-calibration}
 \end{equation}
@@ -909,7 +921,8 @@ adjacent-difference slope prior at its first quantile, without an extra
 random baseline. The exAL VB initializers use the structured factor in
 Section~\ref{subsec:supp_structured_exal_vb}: analytic scale integration
 and quadrature over shape. Their slope covariance is retained, while
-variational intercepts are point estimates.
+variational intercepts are point estimates. The slab scale is learned
+under the prior in Appendix A rather than held fixed.
 
 For each draw, forecast MAE averages the absolute error relative to the
 known state-conditional quantile path, and check loss averages
@@ -972,32 +985,36 @@ over 500; the Laplace and Gaussian-mixture frequencies remain above 5\%.
 Table~\ref{tab:joint-qdesn-pure-desn-v2-recursive-policy} compares the
 primary averaged-feature scores with scores obtained by evaluating each
 coefficient draw along its own recursive path, as defined in
-Section~\ref{sec:forecast_synthesis}. The primary intervals are narrower
-in 28 of 32 cells, with median primary-to-path width ratio 0.736433.
-All four exceptions occur under persistent-heavy-tail dynamics, one for
-each regression. Ratios range from 0.217878 to 1.319454: the two forecast
-functionals do not give nested uncertainty bounds. In these summaries all
-path-score means are higher, but this is a feature of the evaluated
-realizations rather than a general ordering result.
+Section~\ref{sec:forecast_synthesis}. Among the 31 regressions with matching
+three-chain summaries, the primary intervals are narrower throughout,
+with median primary-to-path width ratio 0.4491 and range 0.1583--0.8202.
+Path-score means are also higher throughout these comparisons. The
+Laplace MQ--DESN exAL primary summary uses eight chains, whereas its
+retained recursive-path comparison uses the original three; it is excluded
+from these matched width summaries.
 
-\input{tables/appendix_compact_20261106_mq_scores.tex}
+\input{tables/joint_qdesn_corrected_v3_compact_scores.tex}
 
 All 64 method--model scores are finite, and all 32 MCMC comparisons pass
-the archived score-stability checks. Across primary score sequences,
-maximum rank and folded \(\widehat R\) are approximately 1.038 and 1.017;
-minimum bulk and tail effective sample sizes are approximately 178 and
-275. These describe the scored functional. Independent-level permutations
+the recorded score-stability checks. Across primary score sequences,
+maximum rank and folded \(\widehat R\) are approximately 1.017 and 1.010;
+minimum bulk and tail effective sample sizes are approximately 180 and
+148. These describe the scored functional. Independent-level permutations
 prevent their use as diagnostics of the original scalar chains, whose
 scale--shape mixing remains imperfect.
-The descriptive MQ--DESN-minus-Q--DESN intervals favor MQ--DESN under
-both likelihoods for asymmetric tails; the other fourteen include zero.
+The Laplace MQ--DESN exAL score distribution has a long right tail:
+its posterior mean lies above the central 95\% interval. Its eight-chain
+score mean satisfies the recorded Monte Carlo precision and chain-removal
+stability checks. Within a likelihood, MQ--DESN has a lower mean score in
+six of the sixteen comparisons; all sixteen pairs of marginal intervals
+overlap.
 Table~\ref{tab:joint-qdesn-pure-desn-v2-crossings} separates mean-grid
 crossings, draw crossings and posterior-mean adjustment magnitudes.
 Raw grids are evaluated before equal-weight isotonic projection; every
 scored grid is ordered. Different simulated response trajectories imply
 different future feature matrices despite the common selected reservoir.
 
-\input{tables/appendix_essential_20261106_mq_crossings.tex}
+\input{tables/joint_qdesn_corrected_v3_compact_crossings.tex}
 
 \clearpage
 \section{Application specifications}

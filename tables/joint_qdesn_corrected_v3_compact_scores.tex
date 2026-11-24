@@ -1,0 +1,55 @@
+% Deterministic projection of frozen corrected summaries.
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}lrr@{}}
+\toprule
+Simulation setting & Model & Averaged predictors & Recursive trajectories \\
+\midrule
+Asymmetric-Laplace tail & MQ--DESN (AL) & 0.3703 [0.3671, 0.3745] & 0.3987 [0.3919, 0.4068] \\
+ & Q--DESN (AL) & 0.3695 [0.3660, 0.3740] & 0.4024 [0.3958, 0.4103] \\
+ & MQ--DESN (exAL) & 0.3691 [0.3671, 0.3714] & 0.3911 [0.3871, 0.3970] \\
+ & Q--DESN (exAL) & 0.3701 [0.3667, 0.3746] & 0.3937 [0.3899, 0.3996] \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & MQ--DESN (AL) & 0.4118 [0.4111, 0.4129] & 0.4450 [0.4395, 0.4505] \\
+ & Q--DESN (AL) & 0.4134 [0.4121, 0.4158] & 0.4456 [0.4410, 0.4520] \\
+ & MQ--DESN (exAL) & 0.4143 [0.4125, 0.4168] & 0.4391 [0.4354, 0.4452] \\
+ & Q--DESN (exAL) & 0.4162 [0.4135, 0.4201] & 0.4420 [0.4379, 0.4485] \\
+\addlinespace[2pt]
+Laplace innovations & MQ--DESN (AL) & 0.3581 [0.3566, 0.3596] & 0.3772 [0.3704, 0.3842] \\
+ & Q--DESN (AL) & 0.3577 [0.3565, 0.3591] & 0.3762 [0.3717, 0.3817] \\
+ & MQ--DESN (exAL) & 0.3615 [0.3569, 0.3606] & 0.3857 [0.3685, 0.4328] \\
+ & Q--DESN (exAL) & 0.3589 [0.3573, 0.3606] & 0.3738 [0.3697, 0.3775] \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & MQ--DESN (AL) & 0.4609 [0.4566, 0.4668] & 0.4873 [0.4818, 0.4969] \\
+ & Q--DESN (AL) & 0.4621 [0.4574, 0.4685] & 0.4870 [0.4805, 0.4970] \\
+ & MQ--DESN (exAL) & 0.4613 [0.4573, 0.4672] & 0.4825 [0.4774, 0.4923] \\
+ & Q--DESN (exAL) & 0.4621 [0.4576, 0.4686] & 0.4815 [0.4755, 0.4918] \\
+\addlinespace[2pt]
+Gaussian innovations & MQ--DESN (AL) & 0.3389 [0.3380, 0.3399] & 0.3594 [0.3562, 0.3635] \\
+ & Q--DESN (AL) & 0.3388 [0.3380, 0.3399] & 0.3586 [0.3550, 0.3624] \\
+ & MQ--DESN (exAL) & 0.3407 [0.3389, 0.3427] & 0.3584 [0.3554, 0.3619] \\
+ & Q--DESN (exAL) & 0.3409 [0.3392, 0.3429] & 0.3572 [0.3535, 0.3613] \\
+\addlinespace[2pt]
+Persistent heavy tails & MQ--DESN (AL) & 0.7506 [0.7189, 0.7856] & 0.7892 [0.7457, 0.8291] \\
+ & Q--DESN (AL) & 0.7127 [0.6790, 0.7502] & 0.7572 [0.7101, 0.8201] \\
+ & MQ--DESN (exAL) & 0.7247 [0.6988, 0.7545] & 0.7580 [0.7240, 0.7919] \\
+ & Q--DESN (exAL) & 0.7038 [0.6706, 0.7388] & 0.7346 [0.6869, 0.7828] \\
+\addlinespace[2pt]
+Regime shift & MQ--DESN (AL) & 0.4682 [0.4650, 0.4731] & 0.4997 [0.4928, 0.5082] \\
+ & Q--DESN (AL) & 0.4650 [0.4636, 0.4673] & 0.4992 [0.4924, 0.5069] \\
+ & MQ--DESN (exAL) & 0.4688 [0.4658, 0.4730] & 0.4977 [0.4913, 0.5086] \\
+ & Q--DESN (exAL) & 0.4669 [0.4649, 0.4701] & 0.4960 [0.4913, 0.5029] \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & MQ--DESN (AL) & 0.3965 [0.3953, 0.3979] & 0.4382 [0.4310, 0.4450] \\
+ & Q--DESN (AL) & 0.3965 [0.3952, 0.3979] & 0.4365 [0.4316, 0.4427] \\
+ & MQ--DESN (exAL) & 0.3998 [0.3978, 0.4018] & 0.4341 [0.4293, 0.4404] \\
+ & Q--DESN (exAL) & 0.3997 [0.3978, 0.4018] & 0.4339 [0.4275, 0.4399] \\
+\bottomrule
+\end{tabular}
+\caption{Oracle finite-grid \(\aCRPS\). Entries are posterior means and equal-tailed 95\% intervals. Primary scores condition on averaged future predictors; trajectory-specific scores use recursively generated predictors for individual draws. The Laplace MQ--DESN (exAL) primary summary uses eight chains; its trajectory-specific sensitivity retains the original three chains. These intervals describe score uncertainty, not future-response coverage. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.}
+\label{tab:joint-qdesn-pure-desn-v2-recursive-policy}
+\label{tab:joint-qdesn-pure-desn-v2-score}
+\end{table}

@@ -15,6 +15,21 @@ script_path <- normalizePath(sub("^--file=", "", script_argument), mustWork = TR
 repo_root <- normalizePath(argument("--repo-root", file.path(dirname(script_path), "..")),
                            mustWork = TRUE)
 data_only <- "--data-only" %in% arguments
+current_v3 <- file.exists(file.path(repo_root,
+  "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv"))
+if (current_v3 && !data_only) {
+  # Preserve every v1/v2 numerical assertion below. Its old reader routes
+  # are historical once the independently checked coherent v3 is active.
+  checker_v3 <- file.path(repo_root, "scripts/check_joint_qdesn_corrected_article_projection_v3.R")
+  if (!file.exists(checker_v3)) stop("Current v3 authority checker missing.", call. = FALSE)
+  result_v3 <- system2(file.path(R.home("bin"), "Rscript"),
+    c(shQuote(checker_v3), "--repo-root", shQuote(repo_root)), stdout = TRUE, stderr = TRUE)
+  if (!is.null(attr(result_v3, "status"))) stop(paste(result_v3, collapse = "\n"), call. = FALSE)
+  if (!any(startsWith(result_v3, "JOINT_CORRECTED_ARTICLE_PROJECTION_V3_CHECK=PASS")))
+    stop("Current v3 authority was not admitted.", call. = FALSE)
+  data_only <- TRUE
+  message("V1/V2_HISTORICAL_DATA_ONLY; current reader projection independently admitted by v3.")
+}
 checks <- 0L
 expect <- function(value, message) {
   checks <<- checks + 1L

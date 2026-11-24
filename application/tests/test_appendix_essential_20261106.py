@@ -72,7 +72,10 @@ class EssentialMathematicalTests(unittest.TestCase):
                 self.check(self.supplement.replace(before,after))
 
     def test_width_exceptions_cannot_be_removed_or_generalized(self):
-        for before,after in (("persistent-heavy-tail","another"),("0.736433","1.0")):
+        mutations = (("persistent-heavy-tail","another"),("0.736433","1.0"))
+        if "joint_qdesn_corrected_v3_forecast_figure.tex" in self.main:
+            mutations = (("0.4491", "1.0"), ("31", "32"))
+        for before,after in mutations:
             self.assertIn(before,self.supplement)
             with self.subTest(before=before),self.assertRaises(C.CompressionError):
                 self.check(self.supplement.replace(before,after))
@@ -153,7 +156,10 @@ class EssentialAdmissionTests(unittest.TestCase):
         archived="figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf"
         with mock.patch.object(C,"visible_routes",return_value=dict(visible,**{archived:["qdesn-supplement.tex"]})):
             with self.assertRaisesRegex(C.CompressionError,"archived figure accidentally reintroduced"): C.essential_route_checks(ROOT)
-        hidden=dict(visible); hidden.pop("tables/appendix_essential_20261106_mq_crossings.tex")
+        hidden=dict(visible)
+        path = ("tables/joint_qdesn_corrected_v3_compact_crossings.tex" if C.joint_article_successor(ROOT) is not None
+                else "tables/appendix_essential_20261106_mq_crossings.tex")
+        hidden.pop(path)
         with mock.patch.object(C,"visible_routes",return_value=hidden):
             with self.assertRaisesRegex(C.CompressionError,"actual role consumer absent"): C.essential_route_checks(ROOT)
 

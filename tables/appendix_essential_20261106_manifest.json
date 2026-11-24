@@ -15,7 +15,7 @@
     "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": [
       "qdesn-supplement.tex"
     ],
-    "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_forecast_dgp_acrps.pdf": [
+    "figures/joint_qdesn_simulation/joint_qdesn_corrected_v3_forecast_dgp_acrps.pdf": [
       "main.tex"
     ],
     "main.tex": [
@@ -34,13 +34,7 @@
     "tables/appendix_compact_20261106_ind_frequencies.tex": [
       "qdesn-supplement.tex"
     ],
-    "tables/appendix_compact_20261106_mq_scores.tex": [
-      "qdesn-supplement.tex"
-    ],
     "tables/appendix_essential_20261106_ind_forecast_mae.tex": [
-      "qdesn-supplement.tex"
-    ],
-    "tables/appendix_essential_20261106_mq_crossings.tex": [
       "qdesn-supplement.tex"
     ],
     "tables/glofas_application_current_outputs.tex": [
@@ -74,6 +68,15 @@
     "tables/independent_train500_eval300_mcmc_figures_v1.tex": [
       "main.tex"
     ],
+    "tables/joint_qdesn_corrected_v3_compact_crossings.tex": [
+      "qdesn-supplement.tex"
+    ],
+    "tables/joint_qdesn_corrected_v3_compact_scores.tex": [
+      "qdesn-supplement.tex"
+    ],
+    "tables/joint_qdesn_corrected_v3_forecast_figure.tex": [
+      "main.tex"
+    ],
     "tables/pricefm_full_current_outputs.tex": [
       "main.tex",
       "qdesn-supplement.tex"
@@ -85,9 +88,6 @@
       "main.tex",
       "qdesn-supplement.tex"
     ],
-    "tables/qdesn_multiquantile_forecast_figure_display.tex": [
-      "main.tex"
-    ],
     "tables/qdesn_sections5_7_main_display_overrides.tex": [
       "main.tex"
     ],
@@ -98,17 +98,18 @@
   "approved_contract_sha256": "1068e2f78647a0a3ceef260474d31e185fe7789ba5c49ba3dbf0d5434e9e9e63",
   "baseline_commit": "1b249255018715dd3bdc3c95389c80702d26c8c9",
   "current_source_sha256": {
-    "application/tests/run_tests.R": "c4e77a38dbbca921311202b38312b4d2fe906d74a837e883513624affdbbfbcb",
+    "application/tests/run_tests.R": "da49511b5a44eec1ec1dd1c33eae821685797e01aeb87939173919b0ad7641e6",
     "application/tests/test_appendix_compression_20261106.py": "c4cadbbfd4f33db039cc2369f7b9e585f298206c5bfb422b3c9b9d5680ad854a",
-    "application/tests/test_appendix_essential_20261106.py": "4b5cbc198cb461957957bdec0edd650e0821ff9a7fe55a12c3bb62a305102b14",
+    "application/tests/test_appendix_essential_20261106.py": "98ac019a1c8315f04d40db5814b668300e5b27bbb6292cee1d6cfd371adb8495",
     "application/tests/test_article_clarity_editorial_receipts_20261104.py": "834aa62d957120932078f87e0381f242d91d355569a39be53e9c7e8455717c0e",
     "application/tests/test_forecast_application_exposition_20261031.R": "66387cfb6dd253a0e162ef6533ec7f3e3574a7c621345f58d767f7058b2bfd92",
     "application/tests/test_glofas_current_article_authority.py": "f62772fac237e8b5318052c44d3a76a87c69a8b2bfdb5c97d3f8dd73701ad246",
     "application/tests/test_independent_forecast_editorial_manifest_20261031.R": "bab22f96173dc8bce0df39511823f53eb07531d986c2ebae22571c9cc58e2dce",
     "application/tests/test_independent_reporting_authority_checks.R": "c4368e924e6dd97fb9db15bbb2caf40fe2355c0ce8fc94cfb6bcd2f12c3b83a6",
-    "application/tests/test_joint_qdesn_pure_desn_article_projection_v2.R": "9eef6c96fde38109de0a7e80b2812f79a84c4e21b38cb03f1d38170847b5086b",
+    "application/tests/test_joint_qdesn_corrected_article_projection_v3.R": "b22870f97d25468c2ccbce72393ecf62b05c5f33abaf65a86d680b9218032be8",
+    "application/tests/test_joint_qdesn_pure_desn_article_projection_v2.R": "7dfc0203c8ed031fad5d76f97614c1b539e401963d527ff285e1281affa87224",
     "application/tests/test_pro_review_supplement_math.R": "40792b02437aa49430e4b4e7cb4fd35101af5ef0a58f1724cc2cd567eda24643",
-    "application/tests/test_qdesn_mq_nomenclature.py": "d7b1958201d77cc20f7eb2717d638dc85671967f5e09bedb1439fbb12d4c5701",
+    "application/tests/test_qdesn_mq_nomenclature.py": "291049fa1538120f208a2f759a0aace0d0c4d7b6ab9c589308c45800d962dcbb",
     "application/tests/test_qdesn_reader_focused_editorial_revision.R": "6356ed556132e82110f9a526e861e08d972be0b1dbbbfea8e7b285542bdf718f",
     "application/tests/test_qdesn_sections5_7_presentation.py": "e79679e937db793a54cea035e1340883db3e38559f95a0fbc5e003c31890a065",
     "application/tests/test_qdesn_statistical_language_revision.R": "7a046ac0389ddf61ccbc59e3286fed659f093382c7eb1724fcf112920ad234ac",
@@ -142,30 +143,34 @@
     "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf": "3519c01b61a6e2273a10dec7b92d0fe3fccc93bf01cd6d4bea9d39bcd2d921a8",
     "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
     "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
+    "figures/joint_qdesn_simulation/joint_qdesn_corrected_v3_fit_oracle_rmse.pdf": "48bcf4f592bc6f8e9ee07c5fd50d941054ae978482ae23d696a110a20a7f1cd3",
+    "figures/joint_qdesn_simulation/joint_qdesn_corrected_v3_forecast_dgp_acrps.pdf": "d694fb63b43682686cbe138b9f7db4ab3c0d2de49c1583ec5db0ef82006b943f",
     "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_fit_oracle_rmse.pdf": "420edb5a342f3bba560ba5df19c77927407f7998293d8aff64a91dee731cda5d",
-    "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_forecast_dgp_acrps.pdf": "3ec8421a9442d349949f52d581923425290e841a7abb051a1c0670484acec95c",
     "figures/pricefm_application/pricefm_regional_aql_editorial_20261013.pdf": "5a50a12fc7a3e209eb176569f18adb25535deb77141ab9be136943a729f821dd",
     "figures/quantile_initialization/quantile_initialization_accessibility.txt": "c95a1f117a5d0e5064b815de81bd4fc58d9c875457e985d85a5aac1e077e89cf",
     "figures/quantile_initialization/quantile_initialization_caption.tex": "2aa7adc733eebf551499ac077907b5343be3185b275b6ae748b8f2e54a54b7e4",
     "figures/quantile_initialization/quantile_initialization_picture.tex": "6e1ab7141d75897a48f056a0d69b28e74fecd089df5284f6a08a87d0fc437a69",
     "figures/quantile_initialization/quantile_initialization_styles.tex": "f74bb62033dd8aa51e3657b8262efe9273aefae8b66afb08f6e3bacddd4297fe",
-    "main.tex": "a23ed5008480904ccc45a188caed8554c4e2a06122618c4f57f0d7aa06686c20",
-    "overleaf/article_files.txt": "d27e6b6a1d68e08bc8520257b5b58c933c5952e5cec0392dad8ed661e3565b7d",
-    "qdesn-supplement.tex": "940cfa2c08da37545c087abd5cc7a7e792add46f08d9577e86e9360337a02a29",
+    "main.tex": "a32eb19605eee9304fd3a686dd1b63d201c848cf31f98850f8ed3c705065e113",
+    "overleaf/article_files.txt": "ff63f71db9d9fe70fecd34f7f69d8573ee75e65db22d234c6284efd8f5ec1b67",
+    "qdesn-supplement.tex": "ecad94c65c352c541ae2c5bc0735f9fb6481fef8b5ee3ff15ccdf3ebbd202bb8",
     "refs.bib": "892f613eb7be4f14718b4351c770cc867fb37f2a4cd9651356929224a6bf5678",
-    "scripts/appendix_compression_validation_20261106.py": "704d94b77c17d4f00cc3fde5f92770478e01d113fbbc9b0458b41a03622022da",
-    "scripts/audit_qdesn_article_dependencies.py": "806d804d3329c093213963e7f226e97edf585b9e305c8bad8bcebd8a09449dac",
+    "scripts/appendix_compression_validation_20261106.py": "14e34bca0ddbd71357fb11daaacb6342ee7780def184110dc6af628ba69c1066",
+    "scripts/audit_qdesn_article_dependencies.py": "274530466033a575bb21659f323f8fc1f152bf83cc73f4ad9f57ba31d1f968d7",
     "scripts/build_appendix_compact_tables_20261106.py": "8a14b950ac3063321e52c5c332cb5ce02a2f2ecd3e8fbd16e2b8792cce993648",
     "scripts/build_appendix_essential_displays_20261106.py": "9fa751bed81d0585a1749530418cbabe31e49221379aea0be0bdb945f6713222",
+    "scripts/build_joint_qdesn_corrected_article_projection_v3.R": "dc3fa607633dbee70d59c65b0fbfbd211decf8ea340e746fb5f664729d7fb491",
     "scripts/check_forecast_application_exposition_20261031.R": "8312674faf6b0064020c235a9091137f8db1d8e44ee0b9bc32c95225bc9955cd",
     "scripts/check_independent_forecast_300_500_v1.R": "0756d29875eb2766c84ecb6db31df15bdc56d0e41dd0055873057a710d0a408e",
-    "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R": "2b7b1a0e7304abd39fb14b400e8662683220baf442cfffba7f6587df181cd70c",
+    "scripts/check_joint_qdesn_corrected_article_projection_v3.R": "75134a967fc9180c93600a8e571a3eafff0c1c3165441f24d6cc34ff19d0c672",
+    "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R": "c32b8e7451fb5b9fe6d8953d7a89a514c62c9b969c0a3f8b13411bf5d620b4c4",
     "scripts/check_qdesn_final_manuscript_revision.R": "2d7ce3c182fcbf10c120c5e118b0c97affc89887c14bb124a0c924b915358f3a",
-    "scripts/check_qdesn_mq_nomenclature.py": "b3bfb6b10a0656c7f90b47819fafb8ef266d2839943d953fc5ec525c22db25f2",
-    "scripts/check_qdesn_sections5_7_presentation.py": "5de34aea29b08f7132b42680b4c23c6cd881efa01d78788acd0085dd61217853",
+    "scripts/check_qdesn_mq_nomenclature.py": "6e49bd9f2705b8b5ee2dbf06fa655a2f2c0eb9f5590e0675d8f2a8897503cbf6",
+    "scripts/check_qdesn_sections5_7_presentation.py": "841fb65f71c3e85f12a0b25a350dff10cf4fd94be1ad864cc0cbccdff3b84a10",
     "scripts/check_qdesn_statistical_language_revision.R": "6a6e5c767c4a0aac6b6249d3935487e616da4b95e9f4d18a050c49ee2c19cc3c",
     "scripts/glofas_current_article_authority.py": "2c4ffbaf5990fe3a5624a642e9277d5be1c79f1db30445633f058144d7f45187",
     "scripts/independent_reporting_authority_checks.R": "010ed21d5a549406a8863749ff5baae312c3c0bdebc4ecb9d57eeab67c22148a",
+    "scripts/joint_qdesn_corrected_article_authority_v3.py": "e484ec08d74b190ee50afb504b4aead0a6c56c6a6ab7e7f81b87e12a1cdd0d4d",
     "scripts/reader_online_appendix_legacy_adapter_20261106.R": "c8e0639016e2b4f1993c16cc1e37a1bcb3b6f52a32daa42b21ab5a68e5f78dfc",
     "scripts/refresh_independent_forecast_editorial_manifest_20261031.R": "357c3160e29423d7b0741c4742a06b593ff6d3b773d13fffba417222d0b50e64",
     "scripts/refresh_reader_online_appendix_receipts_20261106.py": "374e35be35ad26049cea35d16fbc3161fe1d8c8368c87ffecb9fbecd68312aba",
@@ -258,20 +263,35 @@
     "tables/independent_train500_eval500_mcmc_normal_v1.tex": "950da5e7f954b64fe2d453edf5060ae70c708aff3811cb8d9b92f3ecf5f0a371",
     "tables/independent_train500_eval500_mcmc_tables_v1.tex": "4bd7dd15d7e615ceb5c61a2664cbac4e9d700f14567b8bc87466fba60b151b8f",
     "tables/independent_vb_fit_preserved_v1.tex": "f1f2b7f6a1b30c5cb1d8697b71de0845c387f2a7a94a3ec4e1d38fd349cb362f",
-    "tables/joint_qdesn_mq_presentation_manifest.json": "4394aeac8e92f9ff50ed5697d552f021a1b59d5342a3807d1c5a20c4e05dcb52",
-    "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv": "cc50ea11fed8bbb3bbe9b7f1d66c2c99c570423853f0d30dd3fe6ffa42c6f473",
+    "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv": "e2538ade281b8f11ca1c8740a5974d4b5207f8538397c687a74c3ac11c0be8df",
+    "tables/joint_qdesn_corrected_v3_chain_identity.csv": "2cd567d5b5e075d56d8295b463cd7547b4bd2302508b1a8f6b040626db866b6d",
+    "tables/joint_qdesn_corrected_v3_compact_crossings.tex": "3f727a4d2b375ea33afe2cacbc2ad0b1fcbb85925f13427540b2465931162e4b",
+    "tables/joint_qdesn_corrected_v3_compact_scores.tex": "abca8fa09a7136b55af61127fd4fd0e4c03094101287bab69a76dd19136cf5c2",
+    "tables/joint_qdesn_corrected_v3_crossing_summary.csv": "530711cd89a8b8b5e51aad6ca75024c0bc7e674b8b2071f9818cf79eb7cec0ea",
+    "tables/joint_qdesn_corrected_v3_crossing_totals.csv": "5fb191bc62bb8f3713356ff70af23cbce47c3f15bada8bc076c8a44a78a71aa9",
+    "tables/joint_qdesn_corrected_v3_draw_counts.csv": "2448ffd25997d44a2d4d706c93c14833cf9075d28568d10991de4dc1042b3d96",
+    "tables/joint_qdesn_corrected_v3_fit_figure.tex": "4180f5afe6e8af3bb60d195b5eb3336eef0011456ee5a6e734f70aeffcb17005",
+    "tables/joint_qdesn_corrected_v3_fit_oracle_diagnostics.csv": "5911131372100ac4d475eab3b640ca5a34080c76fdb92d1fdce9d6dd9ccfd3ef",
+    "tables/joint_qdesn_corrected_v3_forecast_figure.tex": "afdfe37d0974986c7f591a67db23c3cdb35963226b0efd01be3ee6ee54ad2bda",
+    "tables/joint_qdesn_corrected_v3_numerical_contrasts.csv": "60b1c94f139c5e48753a6f0d4410623faa81e3edfcd8be1036cc9c22a5827625",
+    "tables/joint_qdesn_corrected_v3_projection_provenance.csv": "ebf1fcfdcd4b7fa7f7fbaf30617de570f9d52c41835ab0b0ccb9065a20f86899",
+    "tables/joint_qdesn_corrected_v3_protocol.csv": "f6c2b8480c9a65c14b51d69ebe853a878529294e5ad2fd393402f02bfd853939",
+    "tables/joint_qdesn_corrected_v3_protocol.tex": "eaa2483b6664c813ef89751117c8de88be7685b2af21ba504a0fbb98677a591c",
+    "tables/joint_qdesn_corrected_v3_provenance_bindings.csv": "f675a584dfacc7dc4d4dad09c5ca97c9970de4e28727269242e33a6e551cc7a2",
+    "tables/joint_qdesn_corrected_v3_scenario_selection_decisions.csv": "08cd1bd5462642e6f19d5c496c6951e0cb499638d9362d06b57aa0d579c6c97b",
+    "tables/joint_qdesn_corrected_v3_scenario_winners.csv": "bd2c49c45925da025c50c47fdc821209cc85a4724c7ec57ed46c35f18269b33b",
+    "tables/joint_qdesn_corrected_v3_scientific_gates.csv": "9eac0c9ad5194288ab7dd64a48234c656bb97e1563c2062980a427f3815f2c6b",
+    "tables/joint_qdesn_corrected_v3_score_diagnostics.csv": "ee338143ee6da9dcacbc4fdc913ef7489611f9a23161003c74ca66069b73065c",
+    "tables/joint_qdesn_corrected_v3_secondary_scores.tex": "769758e9baa5fcbe6fb623e1e552b4c9d4c3fe0aa81715c9e94ffccf229bebdc",
+    "tables/joint_qdesn_corrected_v3_selected_64_score_summary.csv": "09b7eb58cc8c614839adf184d89d78d278380acf51dff7c328204c9b84f28c28",
+    "tables/joint_qdesn_corrected_v3_selected_backbones.csv": "1b40d4d58140cc3845e33bee074700ae05336586598711a2de07fc1f0591e896",
+    "tables/joint_qdesn_corrected_v3_selected_mcmc_score_summary.csv": "69aced9bbd37ee506a382ed85a7fe2aba116ed296ae4285890540e572122f5f3",
+    "tables/joint_qdesn_corrected_v3_selected_vb_score_summary.csv": "24d278c9a906a8d5886ec90fc2024bd137fd192a92fb7eeb238016e2458a3f9d",
+    "tables/joint_qdesn_corrected_v3_vb_scores.tex": "960b9b44d7c17a95fb73cbb3e278e745049777ae56ea38b5d0c7ed7ac250df63",
     "tables/joint_qdesn_pure_desn_v2_crossing_rates.csv": "50df3e3750d9b0e85d212d0cb6157048b130fc9aa25e23559b21fa622726c7a3",
-    "tables/joint_qdesn_pure_desn_v2_crossing_summary.csv": "b5c65ad5d3a4892715c37b7ca4ce0b4ef1e3e5ade31c79cde492a9b641fadfab",
     "tables/joint_qdesn_pure_desn_v2_draw_cardinality.csv": "a14f94470c8497caa11a94d6396d44a43bbfc38e7e9af5f0b69a54a8ee52c1c8",
     "tables/joint_qdesn_pure_desn_v2_fit_oracle_diagnostics.csv": "042f25708c638310115363ee9dccb09be445dd6df02fd1e4fbd2d7530d7c1bd0",
     "tables/joint_qdesn_pure_desn_v2_forecast_score_summary.csv": "9dacd530801674de5baa32624b38225dbb35ef1f3424548b34519b8fa78c16f0",
-    "tables/joint_qdesn_pure_desn_v2_mcmc_posterior_target_hash_audit.csv": "5aea038e72834a16c93b81063d6db3d99e42bf8b335b2308aee440b90331ae6f",
-    "tables/joint_qdesn_pure_desn_v2_posterior_contrast_summary.csv": "66554105737562a82f094c21c418f39499df107f22a75cd155d838991cfa331d",
-    "tables/joint_qdesn_pure_desn_v2_projection_provenance.csv": "1c015f3818fa69bfe2bcad6fbe2f1023995248bbca5ea46bee80bd6040789114",
-    "tables/joint_qdesn_pure_desn_v2_recursive_policy_comparison.csv": "ae77c933472f1d7f4fe792b878aa18f5c32b912c260449691f4fa5d65727335e",
-    "tables/joint_qdesn_pure_desn_v2_sampler_audit.csv": "2e85af249b753b5c745083d5460ddb9231f8755ab44dd4ed58816c6aa647d53b",
-    "tables/joint_qdesn_pure_desn_v2_scenario_winner_summary.csv": "657338fe76c2b325763c991019ce03dc9888b4b95680cf16a3a30f9a8b40565d",
-    "tables/joint_qdesn_pure_desn_v2_selected_backbones.csv": "ce0e934f1297a6dce65e8f254d06aaa77d09620109c1b3af036e226cec2ae9c2",
     "tables/pricefm_full_current_outputs.tex": "b0b485a3668c2b915b16bc01f0baf0485837ed932241ba93eb81ff5f323bd701",
     "tables/pricefm_r98_article_projection_manifest.json": "1d6ea4f4f5d73617f45e9ca02940114a95d140debdf4c884b1a261999fee89c5",
     "tables/pricefm_r98_fold_comparison.csv": "b43bb3e933aa6507f00d740ca82884f626b67e9cf3f5c16c953cb489b5032db8",
@@ -283,16 +303,9 @@
     "tables/qdesn_asa_compatible.bst": "24c20f372e029985a5c23cde1f2c4ca1e6d710e4930a2fa5b0584b2cc55d684f",
     "tables/qdesn_historical_display_manifest.json": "65a4e301a48b5ec1ef1e173c4f43991d5dbde1b64ca9c881a89b1a7e6cb4bc1f",
     "tables/qdesn_model_display_names.csv": "391044f5ab9d49c011176bbb3ce7a0e7002170b4ce08255519aac9795fb7738a",
-    "tables/qdesn_multiquantile_contrast_display.tex": "c8222a4652284e757a191ce42eba7f9793080456ee3697feac39f0ff3554e3e4",
     "tables/qdesn_multiquantile_crossing_display.tex": "90ad26ea2a15c6459fdd2282fd3c43641254d60fe1d0241051ccde5f6b640f75",
-    "tables/qdesn_multiquantile_design_display.tex": "bb76346751230d39d44ae2d351f06d4b815d17a648b8de88a3ede44289d3b267",
     "tables/qdesn_multiquantile_fit_figure_display.tex": "b5f1d0af825da5810e2ee2aae19ed60ab8b9b991c8ef59828fc69a8cda0ebd05",
-    "tables/qdesn_multiquantile_forecast_figure_display.tex": "1834d537250d024083f688e3c487ce90c88cba4a8b829df699fbc718cf985ccf",
-    "tables/qdesn_multiquantile_oracle_recovery_display.tex": "9f262ecd27afd80b13abf106ac567891145cb5f79c2e66e4970da3fa8d3244f0",
     "tables/qdesn_multiquantile_recursive_policy_display.tex": "6a189d844cf9a402c4a2cf6b6a362f3d64db0beef1436a44186a07a48c1cb47f",
-    "tables/qdesn_multiquantile_score_display.tex": "7f08a89cf1a631d813e7b1800a8a6166e13ce2a88bfc396a0a5807f50ff11334",
-    "tables/qdesn_multiquantile_secondary_score_display.tex": "73503b407aac8c25b6892a065e6089ad212731baddb53f6096bbee9c10f4c939",
-    "tables/qdesn_multiquantile_vb_score_display.tex": "d7b9c64537877cd9b30a0769ac5a35a3cd765819c95864f608dce7eab811b56c",
     "tables/qdesn_sections5_7_main_display_overrides.tex": "a32ada614749b962ae6b3bb3d6a7f09136b56972c2aba9b42b60a0ebb653a9dd",
     "tables/qdesn_sections5_7_presentation_manifest.json": "16e654c4c7c129f959a7492d33b3f0ad1ffe9bf7de381641c0a36a4936360305",
     "tables/qdesn_sections5_7_supp_display_overrides.tex": "f381dbf13a6a6502ca308728626134bba10b8fceca4ab73852f91aa1698e1d3e",
@@ -2200,7 +2213,7 @@
     "mq_crossings": {
       "baseline_label": "tab:joint-qdesn-pure-desn-v2-crossings",
       "baseline_path": "tables/qdesn_multiquantile_crossing_display.tex",
-      "destination": "tables/appendix_essential_20261106_mq_crossings.tex#tab:joint-qdesn-pure-desn-v2-crossings",
+      "destination": "tables/joint_qdesn_corrected_v3_compact_crossings.tex#tab:joint-qdesn-pure-desn-v2-crossings",
       "disposition": "retained",
       "kind": "table",
       "role": "mq_crossings"
@@ -2225,7 +2238,7 @@
     "mq_sensitivity": {
       "baseline_label": "tab:joint-qdesn-pure-desn-v2-recursive-policy",
       "baseline_path": "tables/appendix_compact_20261106_mq_scores.tex",
-      "destination": "tables/appendix_compact_20261106_mq_scores.tex#tab:joint-qdesn-pure-desn-v2-recursive-policy",
+      "destination": "tables/joint_qdesn_corrected_v3_compact_scores.tex#tab:joint-qdesn-pure-desn-v2-recursive-policy",
       "disposition": "retained",
       "kind": "table",
       "role": "mq_sensitivity"
@@ -2248,6 +2261,21 @@
     }
   },
   "schema": "appendix-essential-v2",
+  "scientific_authority_successor": {
+    "article_scores_replaced": true,
+    "historical_compression_flags_scope": "original_20261106_compression_only_not_successor_numerical_equality",
+    "manifest": "tables/joint_qdesn_corrected_v3_article_asset_manifest.csv",
+    "manifest_sha256": "e2538ade281b8f11ca1c8740a5974d4b5207f8538397c687a74c3ac11c0be8df",
+    "projection_only_no_new_fits": true,
+    "roles": {
+      "mq_crossings": "tables/joint_qdesn_corrected_v3_compact_crossings.tex#tab:joint-qdesn-pure-desn-v2-crossings",
+      "mq_sensitivity": "tables/joint_qdesn_corrected_v3_compact_scores.tex#tab:joint-qdesn-pure-desn-v2-recursive-policy"
+    },
+    "schema": "joint-corrected-article-authority-v3",
+    "scientific_authority_replaced": true,
+    "selected_packet_sha256": "69aced9bbd37ee506a382ed85a7fe2aba116ed296ae4285890540e572122f5f3",
+    "source_head": "5ad779121e44330e5a08baee1a44d77ba722b5cd"
+  },
   "scientific_outputs_regenerated": false,
   "scientific_values_changed": false,
   "scores_recomputed": 0,

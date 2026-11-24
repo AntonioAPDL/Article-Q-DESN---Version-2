@@ -11,8 +11,13 @@ authorize main, article, or Overleaf changes.
 - Host: `jerez.be.ucsc.edu`
 - Runtime: `application/cache/joint_qdesn_persistent_tail_exploration_v3_20261124`
 
-The final execution HEAD must be recorded in the runtime preparation and
-capacity receipts after this implementation is committed and pushed.
+The preparation source HEAD is `517f5926e2a636889f28ded2c5bb02702beb95d4`.
+N0 closed at `39d813c3c9aa65cde663d91d0050024e12525711` after correcting its
+matched-equivalence audit. A1 numerical workers ran at that same HEAD. Its
+finalizer and every later numerical stage used
+`ab7a6c976016af0e3a91cf265483d294197457f9`, which only added the reviewed
+historical-control selection classification. The A1 workers did not require a
+rerun because that correction changes finalization, not worker calculations.
 
 ## Preflight
 
@@ -52,6 +57,26 @@ N0 must establish the reviewed tiny-scale equivalence before A3 may prepare H1.
 T1 must freeze four new challengers before confirmation fixtures are created.
 Q3 is the terminal stage in this lane. Do not launch full joint/independent
 AL/exAL VB or MCMC from this handoff.
+
+## Completed execution
+
+All nine stages completed with zero worker failures:
+
+`N0 90/90; A1 12,288/12,288; A2 3,072/3,072; A3 1,152/1,152;
+H1 1,344/1,344; H2 300/300; M1 288/288; T1 60/60; Q3 18/18`.
+
+Q3 contains 126 complete component fits. All component fits converged, all
+reported scores are finite, contract crossings and protected-row use are zero,
+and every frozen manifest verifies. The terminal decision is
+`SEALED_Q3_COMPLETE_RECOMMEND_CASE_LEVEL_CONTINUATION`. No downstream job was
+launched.
+
+The best finalist is `q3_challenger_02` / `persistent_heavy_tail__v3_1866`.
+Its sealed mean score is `0.5163734617`, versus `0.5211643012` for the exact v2
+winner. The matched absolute improvement is `0.0047908395` (about `0.919%`),
+and all three confirmation replicates favor the challenger. This is sufficient
+under the frozen contract to recommend a separately frozen four-model
+continuation. It is not sufficient to replace article authority directly.
 
 ## Isolation
 

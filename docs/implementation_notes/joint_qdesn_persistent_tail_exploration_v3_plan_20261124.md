@@ -102,7 +102,12 @@ verified by the coordinator.
 - [x] Add atomic workers, verified manifests, health checks, and manual finalizers.
 - [x] Add a Jerez-only physical-core launcher with clean/synced Git and capacity gates.
 - [x] Add focused preparation and source-contract tests.
-- [ ] Execute and review N0 before A1/A2/A3.
-- [ ] Execute and review H1/H2/M1/T1/Q3 in order.
+- [x] Execute and review N0 before A1/A2/A3.
+- [x] Execute and review H1/H2/M1/T1/Q3 in order.
 - [ ] If Q3 wins, freeze a separate full four-model VB/MCMC continuation.
 - [ ] Integrate only the final scientifically accepted lane.
+
+The terminal Q3 decision was positive: `q3_challenger_02` improved the matched
+mean score in all three sealed replicates. This completes the v3 exploration
+contract. It authorizes planning the separate continuation but does not itself
+authorize that continuation, article replacement, or integration.

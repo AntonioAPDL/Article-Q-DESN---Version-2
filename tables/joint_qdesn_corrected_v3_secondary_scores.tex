@@ -1,0 +1,54 @@
+% Deterministic projection of frozen corrected summaries.
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}lrrr@{}}
+\toprule
+Simulation setting & Model & Realized aCRPS & Oracle-path MAE & Oracle-path RMSE \\
+\midrule
+Asymmetric-Laplace tail & MQ--DESN (AL) & 0.3719 & 0.1248 & 0.1442 \\
+ & Q--DESN (AL) & 0.3712 & 0.1067 & 0.1266 \\
+ & MQ--DESN (exAL) & 0.3699 & 0.1774 & 0.2239 \\
+ & Q--DESN (exAL) & 0.3709 & 0.1755 & 0.2309 \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & MQ--DESN (AL) & 0.4207 & 0.0547 & 0.0738 \\
+ & Q--DESN (AL) & 0.4224 & 0.0702 & 0.0890 \\
+ & MQ--DESN (exAL) & 0.4233 & 0.1486 & 0.1748 \\
+ & Q--DESN (exAL) & 0.4254 & 0.1476 & 0.1739 \\
+\addlinespace[2pt]
+Laplace innovations & MQ--DESN (AL) & 0.3406 & 0.1073 & 0.1292 \\
+ & Q--DESN (AL) & 0.3383 & 0.1100 & 0.1318 \\
+ & MQ--DESN (exAL) & 0.3434 & 0.1218 & 0.1567 \\
+ & Q--DESN (exAL) & 0.3381 & 0.1468 & 0.1847 \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & MQ--DESN (AL) & 0.4913 & 0.1405 & 0.1681 \\
+ & Q--DESN (AL) & 0.4929 & 0.1392 & 0.1658 \\
+ & MQ--DESN (exAL) & 0.4913 & 0.1886 & 0.2361 \\
+ & Q--DESN (exAL) & 0.4924 & 0.1926 & 0.2399 \\
+\addlinespace[2pt]
+Gaussian innovations & MQ--DESN (AL) & 0.3500 & 0.0885 & 0.1083 \\
+ & Q--DESN (AL) & 0.3500 & 0.0856 & 0.1041 \\
+ & MQ--DESN (exAL) & 0.3514 & 0.1365 & 0.1619 \\
+ & Q--DESN (exAL) & 0.3516 & 0.1366 & 0.1620 \\
+\addlinespace[2pt]
+Persistent heavy tails & MQ--DESN (AL) & 0.7332 & 0.7417 & 0.9565 \\
+ & Q--DESN (AL) & 0.6953 & 0.6943 & 0.8750 \\
+ & MQ--DESN (exAL) & 0.7025 & 0.7209 & 0.9255 \\
+ & Q--DESN (exAL) & 0.6851 & 0.6833 & 0.8700 \\
+\addlinespace[2pt]
+Regime shift & MQ--DESN (AL) & 0.4896 & 0.1142 & 0.1402 \\
+ & Q--DESN (AL) & 0.4878 & 0.0711 & 0.0895 \\
+ & MQ--DESN (exAL) & 0.4920 & 0.1697 & 0.2178 \\
+ & Q--DESN (exAL) & 0.4911 & 0.1534 & 0.1858 \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & MQ--DESN (AL) & 0.4228 & 0.1714 & 0.2032 \\
+ & Q--DESN (AL) & 0.4229 & 0.1676 & 0.2010 \\
+ & MQ--DESN (exAL) & 0.4264 & 0.2276 & 0.2695 \\
+ & Q--DESN (exAL) & 0.4266 & 0.2235 & 0.2657 \\
+\bottomrule
+\end{tabular}
+\caption{Secondary forecast summaries. Realized \(\aCRPS\) is averaged across posterior draws. MAE and RMSE compare the monotone posterior-mean forecast grid with the known DGP quantiles and describe oracle quantile-path recovery, not response prediction errors.}
+\label{tab:joint-qdesn-pure-desn-v2-secondary}
+\end{table}

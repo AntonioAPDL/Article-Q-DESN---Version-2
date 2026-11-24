@@ -1,0 +1,19 @@
+% Deterministic projection of frozen corrected summaries.
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Model & Raw pairs & Mean grid (\%) & Posterior draws (\%) & Mean adjustment & Max. adjustment \\
+\midrule
+MQ--DESN (AL) & 0 & 0.000 & 0.007 & 0 & 0 \\
+Q--DESN (AL) & 9 & 0.019 & 0.755 & \(1.06\times10^{-5}\) & 0.0938 \\
+MQ--DESN (exAL) & 0 & 0.000 & 0.087 & 0 & 0 \\
+Q--DESN (exAL) & 0 & 0.000 & 1.245 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Forecast quantile crossings before monotone projection. Each model has 47,520 adjacent-level comparisons across eight mechanisms. Posterior-draw percentages are first calculated within each mechanism using its retained draw count, then averaged with equal mechanism weights. Adjustments are the equal-mechanism mean and overall maximum for posterior-mean grids on the response scale; values below \(10^{-12}\) are displayed as zero. All projected grids are ordered.}
+\label{tab:joint-qdesn-pure-desn-v2-crossings}
+\end{table}

@@ -134,8 +134,8 @@ uses Markov chain Monte Carlo and model-specific variational approximations.
 Two simulation studies examine quantile-path recovery, forecast performance,
 and quantile crossing. Q--DESN yields competitive forecasts relative to
 structural dynamic quantile linear models. In the multiquantile comparison,
-forecast scores are of similar magnitude across independent and multiquantile
-fits, while multiquantile shrinkage reduces crossings. A streamflow application
+forecast rankings vary across mechanisms, and the multiquantile
+posterior-mean forecast grids are ordered throughout. A streamflow application
 combines historical gauge records with hydrological ensembles to estimate
 quantile-specific forecast corrections. An electricity-price benchmark compares
 regional Q--DESN forecasts with released forecasts from PriceFM, a pretrained
@@ -529,9 +529,9 @@ to one-dimensional quadrature in \(\gamma\). Online Appendices A and B
 specify the variational factors, ordered-intercept calculation, coordinate
 monitor and stopping criteria, together with the shared MCMC updates.
 
-A completed VB fit can also initialize MCMC under the same model. The single-level simulation
-uses three independently initialized MCMC chains and the multiquantile
-simulation uses five. We assess parameter mixing using rank-normalized
+A completed VB fit can also initialize MCMC under the same model. Both simulation
+studies use three independently initialized MCMC chains, with eight chains
+for the Laplace MQ--DESN exAL comparison. We assess parameter mixing using rank-normalized
 \(\widehat R\) and effective sample sizes, alongside stability of the
 forecast criteria. Online Appendix D gives iteration counts, burn-in,
 scoring subsets and available score diagnostics, distinguishing these from
@@ -890,12 +890,14 @@ Nonlinear reservoir dynamics & Two-component Gaussian mixture
 \end{tabularx}
 \end{table}
 
-For each mechanism, we select one DESN and RHS specification using separately
-simulated calibration series. This specification is shared by independent
-Q--DESN under AL and exAL and MQ--DESN under AL and exAL. The final
+For each mechanism, candidate DESN and RHS specifications are screened using
+separately simulated calibration series. The reported specification is then
+chosen after reviewing evaluation scores and sampling stability, as detailed
+in online Appendix D. This specification is shared by independent Q--DESN
+under AL and exAL and MQ--DESN under AL and exAL. The final
 realization again has 12,000
 observations, of which the first 2,000 are discarded. Using the same
-observation-time convention, times 8501--9000 form the 500-observation fitting
+observation-time convention, times 7701--9000 form the 1,300-observation fitting
 sample. Forecasts start at times \(9000+30j\), \(j=0,\ldots,32\), and extend 30 steps,
 giving 990 common origin--horizon pairs. These origins are not independent
 simulation replications.
@@ -920,27 +922,24 @@ it with draw-specific recursive forecasts.
 
 Figure~\ref{fig:joint-qdesn-pure-desn-v2-forecast-acrps} shows the posterior
 score comparison. MQ--DESN under exAL has the lowest mean for asymmetric
-tails and MQ--DESN under AL for Gaussian dynamics. Independent Q--DESN
-under AL is lowest for
-Gaussian-mixture, Laplace, nonlinear-reservoir, persistent-heavy-tail, and
-Student-\(t\) mechanisms; independent Q--DESN under exAL is lowest for regime shifts.
+tails, while MQ--DESN under AL is lowest for Gaussian-mixture and
+nonlinear-reservoir dynamics. Independent Q--DESN under AL is lowest for
+Gaussian, Laplace, regime-shift, and Student-\(t\) mechanisms; independent
+Q--DESN under exAL is lowest for persistent-heavy-tail dynamics.
 The marginal intervals of the numerical winner and runner-up overlap in
 every mechanism.
 
 Across 47,520 adjacent-level comparisons per model, the raw crossing rates of
-the posterior-mean forecast grids are 0.021\% (10 crossings) for MQ--DESN
-(AL), 5.488\% (2,608) for Q--DESN (AL), 0\% for MQ--DESN (exAL), and
-0.606\% (288) for Q--DESN (exAL).
-MQ--DESN under exAL has no raw crossings in any of the eight mechanisms.
-Both multiquantile coefficient sharing and the exAL likelihood are associated
-with fewer crossings in this comparison. The improvement in ordering is
-more consistent than the score gains: independent regressions have the
-lowest mean oracle score in six mechanisms, whereas MQ--DESN leads for
-Gaussian and asymmetric-tail dynamics. Online Appendix D gives the complete
+the posterior-mean forecast grids are 0.019\% (nine crossings) for Q--DESN
+under AL and zero for the other three regressions. Both MQ--DESN
+likelihoods therefore give ordered mean grids in every mechanism, as does
+independent Q--DESN under exAL. With crossings rare throughout this
+comparison, the numerical score preference varies more by mechanism than
+by independent or multiquantile estimation. Online Appendix D gives the complete
 score comparisons, quantile-crossing diagnostics, and recursive-feature
 sensitivity.
 
-\input{tables/qdesn_multiquantile_forecast_figure_display.tex}
+\input{tables/joint_qdesn_corrected_v3_forecast_figure.tex}
 \clearpage
 
 \section{Application: Streamflow Quantile Forecast Correction}
@@ -1276,11 +1275,12 @@ Gibbs-based computation, while VB makes repeated regression fits practical.
 
 The single-quantile comparison is most favorable to Q--DESN at the median,
 with likelihood preferences varying by observation-error family. In the
-multiquantile study, MQ--DESN improves the ordering of posterior-mean
-forecast grids, especially under exAL, while independent regressions have
-lower mean oracle scores in most mechanisms. These results distinguish the
-benefit of adjacent-coefficient regularization for quantile ordering from its
-less consistent gains in forecast scores.
+multiquantile study, both MQ--DESN likelihoods give ordered posterior-mean
+forecast grids in all eight mechanisms, as does independent Q--DESN under
+exAL. Independent regressions have the lowest mean oracle score in five
+mechanisms and MQ--DESN in three, with overlapping marginal intervals in
+each comparison. Here, adjacent-coefficient shrinkage maintains quantile
+ordering without giving a consistent forecast-score advantage.
 
 The applications illustrate different uses of the regression. For streamflow
 correction, the reference--discrepancy regression combines gauge measurements

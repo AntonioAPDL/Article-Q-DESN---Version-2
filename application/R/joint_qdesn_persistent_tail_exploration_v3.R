@@ -995,15 +995,26 @@ app_joint_pht3_finalize_n0 <- function(root) {
   aggregate <- app_joint_pht3_aggregate(scores, c("scenario_id", "candidate_id", "prior_profile"))
   tiny <- scores[scores$prior_mode == "fixed_tau0" & scores$rhs_tau0 <= 1e-6, , drop = FALSE]
   checks <- app_bind_rows_fill(lapply(split(tiny, tiny$candidate_id), function(x) {
-    score_rel <- diff(range(x$calibration_acrps_mean)) /
-      max(abs(mean(x$calibration_acrps_mean)), sqrt(.Machine$double.eps))
-    beta_rel <- diff(range(x$beta_l2)) / max(abs(mean(x$beta_l2)), sqrt(.Machine$double.eps))
-    data.frame(candidate_id = x$candidate_id[[1L]], score_relative_range = score_rel,
-      beta_l2_relative_range = beta_rel,
-      finite_all = all(is.finite(c(x$calibration_acrps_mean, x$beta_l2,
-        x$e_inv_tau2, x$e_inv_xi))), stringsAsFactors = FALSE)
+    matched <- app_bind_rows_fill(lapply(split(x, x$replicate_id), function(y) {
+      data.frame(replicate_id = y$replicate_id[[1L]],
+        tau0_profiles = nrow(y),
+        score_relative_range = diff(range(y$calibration_acrps_mean)) /
+          max(abs(mean(y$calibration_acrps_mean)), sqrt(.Machine$double.eps)),
+        beta_l2_relative_range = diff(range(y$beta_l2)) /
+          max(abs(mean(y$beta_l2)), sqrt(.Machine$double.eps)),
+        finite_all = all(is.finite(c(y$calibration_acrps_mean, y$beta_l2,
+          y$e_inv_tau2, y$e_inv_xi))), stringsAsFactors = FALSE)
+    }))
+    data.frame(candidate_id = x$candidate_id[[1L]],
+      matched_replicates = nrow(matched),
+      tau0_profiles_per_replicate_min = min(matched$tau0_profiles),
+      score_relative_range = max(matched$score_relative_range),
+      beta_l2_relative_range = max(matched$beta_l2_relative_range),
+      finite_all = all(matched$finite_all), stringsAsFactors = FALSE)
   }))
-  equivalent <- nrow(checks) == 5L && all(checks$finite_all) &&
+  equivalent <- nrow(checks) == 5L && all(checks$matched_replicates ==
+      contract$discovery_replicates) && all(checks$tau0_profiles_per_replicate_min == 4L) &&
+    all(checks$finite_all) &&
     all(checks$score_relative_range <= contract$n0_score_relative_tolerance) &&
     all(checks$beta_l2_relative_range <= contract$n0_beta_relative_tolerance)
   profiles <- app_joint_pht3_prior_profiles(contract)

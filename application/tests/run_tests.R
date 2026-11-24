@@ -261,6 +261,8 @@ run_standalone_glofas_test("application/tests/test_joint_qdesn_superfinal_predic
 run_standalone_glofas_test("application/tests/test_joint_qdesn_superfinal_al_kernel_rerun.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_persistent_tail_targeted_screen.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_persistent_tail_targeted_source_guard.R")
+run_standalone_glofas_test("application/tests/test_joint_qdesn_persistent_tail_exploration_v3.R")
+run_standalone_glofas_test("application/tests/test_joint_qdesn_persistent_tail_exploration_v3_source_guard.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_al_kernel_correction.R")
 run_standalone_glofas_test("application/tests/test_composable_scientific_source_guard.R")
 run_standalone_glofas_test("application/tests/test_joint_superfinal_final_source_guard.R")

@@ -1,0 +1,6 @@
+source_candidate_id,anchor_role,D,n,width_shape,response_lags,alpha,rho,pi_w,pi_in,input_scale,recurrent_sparsity_mode,source_rhs_tau0
+persistent_heavy_tail__targeted_0001,anchor_authoritative_v3,1,24,flat,10,0.2,0.98,0.2,1,0.25,historical_exact,1
+persistent_heavy_tail__targeted_0209,anchor_v2_winner,1,24,bottleneck,1,0.9835177441,0.2030280668,0.005,0.05,0.10,fixed_probability,0.0000000001
+persistent_heavy_tail__targeted_1355,anchor_v2_near_tie,1,24,tapered,3,0.08993952226,1.16,0.005,0.05,0.03,fixed_probability,0.0000000001
+persistent_heavy_tail__targeted_0490,anchor_v2_local,1,24,bottleneck,5,0.2246397104,0.9988025629,0.005,0.05,0.50,fixed_probability,0.000000005623413252
+persistent_heavy_tail__targeted_0101,anchor_v2_layered,3,7;7;6,flat,1,0.826284256;0.826284256;0.826284256,0.4764008478;0.4764008478;0.4764008478,0.005;0.005;0.005,0.1;0.1;0.1,1.00,fixed_probability,0.0000000001

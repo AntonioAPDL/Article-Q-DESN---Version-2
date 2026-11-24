@@ -9,6 +9,19 @@ local({
   constants <- env$app_joint_final_source_constants()
   manifest <- read.csv(file.path(root, constants$final_manifest),
     colClasses = "character", check.names = FALSE, stringsAsFactors = FALSE)
+  v3_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_persistent_tail_exploration_v3_sources_20261124.csv")
+  if (file.exists(v3_manifest)) {
+    extension_env <- new.env(parent = baseenv())
+    sys.source(file.path(root, "scripts/joint_persistent_tail_v3_source_guard.R"),
+      envir = extension_env)
+    extension_checks <- extension_env$app_check_joint_pht3_sources(root)
+    stopifnot(length(attr(extension_checks, "prior_authorized_paths")) == 13L,
+      length(attr(extension_checks, "extension_authorized_paths")) == 10L)
+    cat(sprintf("JOINT_SUPERFINAL_FINAL_SOURCE_GUARD_PASS checks=%d mutation_rejections=4 production_runs=0 extension=v3_verified\n",
+      length(extension_checks)))
+    return(invisible(NULL))
+  }
   extension_manifest <- file.path(root, "docs/reproducibility",
     "joint_qdesn_persistent_tail_targeted_screen_sources_20261124.csv")
   if (file.exists(extension_manifest)) {

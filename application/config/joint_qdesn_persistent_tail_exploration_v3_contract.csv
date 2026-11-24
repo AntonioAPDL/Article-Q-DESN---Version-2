@@ -1,0 +1,57 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_exploration_v3,character,Final case-specific persistent-heavy-tail discovery and sealed-confirmation contract.
+identity,run_tag,joint_qdesn_persistent_tail_exploration_v3_20261124,character,Ignored Jerez runtime tag.
+identity,parent_branch,work/joint-qdesn-persistent-tail-targeted-screen-20261124,character,Frozen v2 parent lane.
+identity,parent_head,a097b01df88496cacb75b86027aaa0dfe9e18825,character,Frozen v2 parent commit.
+scope,scenario_id,persistent_heavy_tail,character,Only scenario authorized for v3.
+scope,selection_unit,scenario_specific,character,No universal DESN selection is permitted.
+scope,protected_selection_forbidden,true,logical,Protected outcomes cannot be loaded by discovery or confirmation workers.
+screen,candidate_count,4096,integer,Deterministic architecture registry size.
+screen,anchor_count,32,integer,Frozen exact and derived anchors.
+screen,low_rho_count,1792,integer,High-leakage low-radius candidates.
+screen,supercritical_count,1024,integer,Compact supercritical candidates.
+screen,layered_count,768,integer,Heterogeneous layered candidates.
+screen,global_count,480,integer,Compact global safeguard candidates.
+screen,a1_advance_count,1024,integer,Candidates retained after early origins.
+screen,a2_advance_count,128,integer,Candidates retained after all discovery origins.
+screen,a3_advance_count,64,integer,Seed-robust architectures entering RHS screening.
+screen,a1_origin_indices,1;5;10,integer_vector,Early rolling origins.
+screen,full_origin_indices,1;2;3;4;5;6;7;8;9;10,integer_vector,Complete internal rolling origins.
+screen,discovery_replicates,3,integer,New development fixtures used through Q2.
+screen,confirmation_replicates,3,integer,Sealed fixtures materialized only after Q2 freezes finalists.
+screen,discovery_seed_offset,30000,integer,Offset from the scenario selector seed base.
+screen,confirmation_seed_offset,40000,integer,Disjoint sealed-confirmation seed offset.
+screen,reservoir_seed_offsets,0;101;202,integer_vector,Frozen reservoir-seed robustness offsets.
+prior,n0_tau0_values,1;0.000001;0.0000000001;0.00000000000001;0.00000000000000000001,numeric_vector,Fixed hyperprior scales in the numerical-identifiability pilot.
+prior,n0_calibrated_fraction,0.10,numeric,Penalized-dimension fraction for the calibrated pilot profile.
+prior,n0_score_relative_tolerance,0.00000001,numeric,Maximum tiny-scale score difference treated as practically identical.
+prior,n0_beta_relative_tolerance,0.000001,numeric,Maximum beta-L2 difference treated as practically identical.
+prior,h1_fixed_tau0_values,0.0000000001;0.0001;0.01;1;100,numeric_vector,Nonredundant fixed scales used after N0.
+prior,h1_calibrated_fractions,0.10;0.30,numeric_vector,Calibrated effective-model-size profiles.
+prior,h1_advance_count,20,integer,Architecture-prior profiles entering slab refinement.
+prior,h2_zeta2_values,learned;0.25;1;4;16,character_vector,Regularized-horseshoe slab profiles.
+prior,h2_advance_count,16,integer,Profiles entering quantile prior calibration.
+quantile,q1_tau0_multipliers,0.01;0.1;0.5;1;2;10,numeric_vector,Quantile-stage scales around the selected normal-RHS scale.
+quantile,q1_advance_count,10,integer,Median profiles entering outer-tail confirmation.
+quantile,tail_tau,0.05;0.95,numeric_vector,Outer-tail sentinel levels.
+quantile,tail_score_weights,0.25;0.50;0.25,numeric_vector,Three-level normalized score weights.
+quantile,q2_advance_count,4,integer,New challengers entering sealed seven-grid confirmation.
+quantile,quantile_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Frozen seven-level grid.
+quantile,minimum_mean_improvement,0,numeric,Any positive matched mean improvement can advance.
+gates,maximum_rhs_dimension,600,integer,Maximum penalized readout dimension.
+gates,maximum_joint_dense_dimension,600,integer,Seven-level dense backend ceiling.
+gates,max_state_saturation,0.25,numeric,State saturation review threshold.
+gates,initial_state_perturbation_scale,0.000001,numeric,Supercritical-state perturbation size.
+gates,max_initial_state_score_relative_change,0.01,numeric,Maximum allowed perturbation sensitivity.
+gates,require_nonzero_input_connections,true,logical,Reject reservoirs with no realized input connections.
+gates,require_nonzero_recurrent_connections,true,logical,Reject reservoirs with no realized recurrent connections.
+gates,require_positive_realized_radius,true,logical,Reject reservoirs with zero realized recurrent spectral radius.
+gates,require_finite_scores,true,logical,All retained scores must be finite.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Production execution host.
+runtime,max_physical_workers,30,integer,Maximum distinct physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum Jerez data-disk headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,host_reserve_memory_gib,64,numeric,Memory reserved from worker allocation.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,automatic_downstream_launch,false,logical,Every stage freezes and stops for review.

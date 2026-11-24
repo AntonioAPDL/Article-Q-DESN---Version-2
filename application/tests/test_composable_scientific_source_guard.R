@@ -7,7 +7,18 @@ local({
   }
   final_manifest <- file.path(root, "docs/reproducibility",
     "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
-  if (file.exists(final_manifest)) {
+  v3_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_persistent_tail_exploration_v3_sources_20261124.csv")
+  if (file.exists(v3_manifest)) {
+    env <- new.env(parent = baseenv())
+    sys.source(file.path(root, "scripts/joint_persistent_tail_v3_source_guard.R"),
+      envir = env)
+    checks <- env$app_check_joint_pht3_sources(root)
+    stopifnot(length(attr(checks, "extension_authorized_paths")) == 10L)
+    cat(sprintf(paste0("COMPOSABLE_SCIENTIFIC_SOURCE_GUARD_PASS checks=%d ",
+      "mutation_rejections=8 production_runs=0 pht3_overlay=TRUE\n"), length(checks)))
+    return(invisible(NULL))
+  } else if (file.exists(final_manifest)) {
     env <- new.env(parent = baseenv())
     sys.source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
       envir = env)

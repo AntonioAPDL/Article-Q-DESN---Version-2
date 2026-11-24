@@ -90,6 +90,7 @@ stopifnot(
   grepl("available_gib >= 128", launcher, fixed = TRUE),
   grepl("taskset -c", launcher, fixed = TRUE),
   grepl("git status --porcelain", launcher, fixed = TRUE),
+  grepl("$2 ~ /^(R|Rscript)$/", launcher, fixed = TRUE),
   grepl("Another model Rscript is active", launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail", launcher, fixed = TRUE)
 )

@@ -57,7 +57,9 @@ upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)
 [[ $(git rev-list --left-right --count "$upstream...HEAD") == $'0\t0' ]] || {
   echo "The execution branch is not exactly synchronized with its upstream." >&2; exit 2;
 }
-active_model_jobs=$(pgrep -u "$USER" -af '[R]script.*(joint_qdesn|glofas|pricefm)' || true)
+active_model_jobs=$(ps -u "$USER" -o pid=,comm=,args= | awk '
+  $2 ~ /^(R|Rscript)$/ && tolower($0) ~ /(joint_qdesn|glofas|pricefm)/ {print}
+')
 [[ -z $active_model_jobs ]] || {
   echo "Another model Rscript is active on Jerez; refusing a competing launch:" >&2
   printf '%s\n' "$active_model_jobs" >&2

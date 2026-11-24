@@ -18,7 +18,12 @@ stopifnot(
   contract$max_workers == 30L,
   identical(contract$required_hostname, "jerez.be.ucsc.edu"),
   contract$protected_selection_forbidden,
-  contract$stop_after_median,
+  !contract$stop_after_median,
+  contract$stop_after_tail,
+  identical(contract$tail_tau, c(0.05, 0.95)),
+  identical(contract$tail_score_weights, c(0.25, 0.50, 0.25)),
+  contract$joint_quantile_levels == 7L,
+  contract$maximum_joint_dense_dimension == 600L,
   !contract$automatic_downstream_launch,
   identical(axes$rho_range, c(0.1, 1.2)),
   max(axes$state_budget) == 600L,
@@ -34,12 +39,18 @@ stopifnot(
   !anyDuplicated(candidates$structural_signature),
   all(candidates$scenario_id == "persistent_heavy_tail"),
   sum(candidates$candidate_role == "supercritical_rho") == 512L,
+  sum(candidates$rho_requested_max >= 1) == 512L,
+  all(candidates$rho_requested_max[candidates$candidate_role != "supercritical_rho"] < 1),
   all(candidates$rho_requested_max > 0),
   max(candidates$rho_requested_max) <= 1.2,
   any(candidates$rho_requested_max > 1),
   all(app_as_bool_vec(candidates$allow_supercritical_rho[candidates$rho_requested_max >= 1])),
   all(!app_as_bool_vec(candidates$enforce_leaky_radius[candidates$rho_requested_max >= 1])),
-  all(!app_as_bool_vec(candidates$allow_supercritical_rho[candidates$rho_requested_max < 1]))
+  all(!app_as_bool_vec(candidates$allow_supercritical_rho[candidates$rho_requested_max < 1])),
+  all(candidates$joint_dense_dimension ==
+    7L * as.integer(candidates$retained_state_budget)),
+  all(app_as_bool_vec(candidates$joint_backend_eligible) ==
+    (candidates$joint_dense_dimension <= 600L))
 )
 
 base_cfg <- list(reservoir = list(
@@ -81,6 +92,18 @@ stopifnot(
   any(grepl("anchor_authoritative_v3", selected$candidate_role))
 )
 
+joint_selected <- app_joint_pht_select_candidates(probe, 64L, 16L, 0.25,
+  require_joint_eligible = TRUE)
+stopifnot(
+  nrow(joint_selected) == 64L,
+  all(app_as_bool_vec(joint_selected$joint_backend_eligible)),
+  any(joint_selected$candidate_role == "anchor_authoritative_v3")
+)
+
+stopifnot(abs(app_joint_pht_tail_sentinel_score(c(1, 2, 3)) - 4) < 1e-12)
+invalid_tail <- try(app_joint_pht_tail_sentinel_score(c(1, 2)), silent = TRUE)
+stopifnot(inherits(invalid_tail, "try-error"))
+
 launcher <- paste(readLines(file.path(repo_root, "application/scripts",
   "launch_joint_qdesn_persistent_tail_targeted_stage.sh"), warn = FALSE), collapse = "\n")
 stopifnot(
@@ -92,6 +115,7 @@ stopifnot(
   grepl("git status --porcelain", launcher, fixed = TRUE),
   grepl("$2 ~ /^(R|Rscript)$/", launcher, fixed = TRUE),
   grepl("Another model Rscript is active", launcher, fixed = TRUE),
+  grepl("t1) PLAN=tail_al_worker_plan.csv", launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail", launcher, fixed = TRUE)
 )
 worker_script <- paste(readLines(file.path(repo_root, "application/scripts",
@@ -99,7 +123,8 @@ worker_script <- paste(readLines(file.path(repo_root, "application/scripts",
 check_script <- paste(readLines(file.path(repo_root, "application/scripts",
   "check_joint_qdesn_persistent_tail_targeted_screen.R"), warn = FALSE), collapse = "\n")
 stopifnot(
-  grepl("worker %d failed", worker_script, fixed = TRUE),
+  grepl("app_joint_pht_run_worker", worker_script, fixed = TRUE),
+  grepl("c(\"m1\", \"t1\")", worker_script, fixed = TRUE),
   grepl("health$failed > 0L", check_script, fixed = TRUE)
 )
 

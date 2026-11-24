@@ -17,7 +17,7 @@ local({
       envir = extension_env)
     extension_checks <- extension_env$app_check_joint_pht_sources(root)
     stopifnot(length(attr(extension_checks, "prior_authorized_paths")) == 8L,
-      length(attr(extension_checks, "extension_authorized_paths")) == 11L)
+      length(attr(extension_checks, "extension_authorized_paths")) == 13L)
     rejected <- 0L
     reject <- function(expr) {
       error <- tryCatch({ force(expr); NULL }, error = identity)

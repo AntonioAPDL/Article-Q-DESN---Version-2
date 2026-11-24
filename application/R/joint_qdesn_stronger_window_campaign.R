@@ -516,12 +516,17 @@ app_joint_sw_origin_rows <- function(design, origin_indices, max_lead) {
   blocks[origin_indices]
 }
 
-app_joint_sw_recursive_gaussian <- function(design, fixture, fit, contract, origin_indices) {
+app_joint_sw_recursive_gaussian <- function(
+  design, fixture, fit, contract, origin_indices, state_perturbation = 0
+) {
   blocks <- app_joint_sw_origin_rows(design, origin_indices, contract$calibration_max_lead)
   score_local <- unlist(blocks, use.names = FALSE)
   qhat <- matrix(NA_real_, nrow = length(score_local), ncol = length(design$tau))
   pred_mean <- pred_sd <- numeric(length(score_local))
   full_time <- origin <- horizon <- integer(length(score_local))
+  recursive_state_count <- recursive_saturated_count <- 0L
+  recursive_state_max_abs <- 0
+  recursive_state_finite <- TRUE
   cursor <- 0L
   for (block_position in seq_along(blocks)) {
     block <- blocks[[block_position]]
@@ -529,6 +534,11 @@ app_joint_sw_recursive_gaussian <- function(design, fixture, fit, contract, orig
     origin_local <- min(block) - 1L
     origin_full <- design$row_meta$full_time_index[[origin_local]]
     states <- lapply(design$teacher_forced_states, function(H) as.numeric(H[origin_local, ]))
+    if (is.finite(state_perturbation) && state_perturbation > 0) {
+      states <- Map(function(state, layer) {
+        state + state_perturbation * sin(seq_along(state) + layer)
+      }, states, seq_along(states))
+    }
     history <- fixture$y_history[seq_len(origin_full)]
     for (hh in seq_along(block)) {
       local_target <- block[[hh]]
@@ -537,6 +547,17 @@ app_joint_sw_recursive_gaussian <- function(design, fixture, fit, contract, orig
         response_lags = design$response_lags, sc = design$dgp_row)
       scaled <- app_joint_recursive_scale_row(raw, design$scale_params)
       states <- app_qdesn_continue_one_step(states, scaled, design$reservoir, design$reservoir_meta)
+      state_values <- unlist(states, use.names = FALSE)
+      recursive_state_count <- recursive_state_count + length(state_values)
+      recursive_saturated_count <- recursive_saturated_count + sum(abs(state_values) > 0.99)
+      recursive_state_finite <- recursive_state_finite && all(is.finite(state_values))
+      if (length(state_values)) {
+        recursive_state_max_abs <- if (all(is.finite(state_values))) {
+          max(recursive_state_max_abs, max(abs(state_values)))
+        } else {
+          Inf
+        }
+      }
       state_raw <- app_qdesn_readout_row_from_states(states, design$reservoir)
       state <- (state_raw - design$state_center) / design$state_scale
       x <- matrix(c(1, state), nrow = 1L, dimnames = list(NULL, colnames(design$X)))
@@ -551,8 +572,16 @@ app_joint_sw_recursive_gaussian <- function(design, fixture, fit, contract, orig
       history[[tt]] <- pred$mean[[1L]]
     }
   }
+  recursive_state_saturation_fraction <- if (recursive_state_count) {
+    recursive_saturated_count / recursive_state_count
+  } else {
+    NA_real_
+  }
   list(qhat = qhat, pred_mean = pred_mean, pred_sd = pred_sd,
-    score_local = score_local, full_time_index = full_time, origin_index = origin, horizon = horizon)
+    score_local = score_local, full_time_index = full_time, origin_index = origin, horizon = horizon,
+    recursive_state_saturation_fraction = recursive_state_saturation_fraction,
+    recursive_state_max_abs = recursive_state_max_abs,
+    recursive_state_finite = recursive_state_finite)
 }
 
 app_joint_sw_vm_hwm_kib <- function() {
@@ -599,6 +628,9 @@ app_joint_sw_score_ridge <- function(fixture, candidate, contract, origin_indice
     effective_rank = design$diagnostic$effective_rank,
     condition_number = design$diagnostic$condition_number,
     state_saturation_fraction = design$diagnostic$state_saturation_fraction,
+    recursive_state_saturation_fraction = pred$recursive_state_saturation_fraction,
+    recursive_state_max_abs = pred$recursive_state_max_abs,
+    recursive_state_finite = pred$recursive_state_finite,
     calibration_acrps_mean = mean(score),
     calibration_acrps_sd = stats::sd(score),
     calibration_exact_gaussian_crps = mean(app_glofas_normal_crps(
@@ -670,6 +702,9 @@ app_joint_sw_score_rhs <- function(fixture, candidate, contract, origin_indices)
     effective_rank = design$diagnostic$effective_rank,
     condition_number = design$diagnostic$condition_number,
     state_saturation_fraction = design$diagnostic$state_saturation_fraction,
+    recursive_state_saturation_fraction = pred$recursive_state_saturation_fraction,
+    recursive_state_max_abs = pred$recursive_state_max_abs,
+    recursive_state_finite = pred$recursive_state_finite,
     calibration_acrps_mean = mean(score),
     calibration_acrps_sd = stats::sd(score),
     calibration_exact_gaussian_crps = mean(app_glofas_normal_crps(
@@ -697,7 +732,7 @@ app_joint_sw_score_rhs <- function(fixture, candidate, contract, origin_indices)
     realized_acrps = score,
     stringsAsFactors = FALSE
   )
-  list(summary = summary, detail = detail, trace = fit$trace)
+  list(summary = summary, detail = detail, trace = fit$trace, fit = fit, design = design)
 }
 
 app_joint_sw_stage_spec <- function(stage) {

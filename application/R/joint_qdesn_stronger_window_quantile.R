@@ -44,6 +44,7 @@ app_joint_swq_controls_frame <- function(controls) {
 app_joint_swq_stage_spec <- function(stage) {
   switch(as.character(stage),
     m1 = c(plan = "median_al_worker_plan.csv", id = "median_worker_id"),
+    t1 = c(plan = "tail_al_worker_plan.csv", id = "tail_worker_id"),
     q1 = c(plan = "seven_al_worker_plan.csv", id = "q1_worker_id"),
     stop("Unknown stronger-window quantile stage.", call. = FALSE)
   )
@@ -168,6 +169,9 @@ app_joint_swq_recursive_quantile <- function(
   qhat <- median_qhat <- numeric(n)
   full_time <- origin <- horizon <- integer(n)
   score_local <- integer(n)
+  recursive_state_count <- recursive_saturated_count <- 0L
+  recursive_state_max_abs <- 0
+  recursive_state_finite <- TRUE
   cursor <- 0L
   for (position in seq_along(blocks)) {
     block <- blocks[[position]]
@@ -182,6 +186,17 @@ app_joint_swq_recursive_quantile <- function(
         response_lags = design$response_lags, sc = design$dgp_row)
       scaled <- app_joint_recursive_scale_row(raw, design$scale_params)
       states <- app_qdesn_continue_one_step(states, scaled, design$reservoir, design$reservoir_meta)
+      state_values <- unlist(states, use.names = FALSE)
+      recursive_state_count <- recursive_state_count + length(state_values)
+      recursive_saturated_count <- recursive_saturated_count + sum(abs(state_values) > 0.99)
+      recursive_state_finite <- recursive_state_finite && all(is.finite(state_values))
+      if (length(state_values)) {
+        recursive_state_max_abs <- if (all(is.finite(state_values))) {
+          max(recursive_state_max_abs, max(abs(state_values)))
+        } else {
+          Inf
+        }
+      }
       state_raw <- app_qdesn_readout_row_from_states(states, design$reservoir)
       state <- (state_raw - design$state_center) / design$state_scale
       cursor <- cursor + 1L
@@ -197,8 +212,16 @@ app_joint_swq_recursive_quantile <- function(
   if (cursor != n || any(!is.finite(c(qhat, median_qhat)))) {
     stop("Recursive quantile forecast is incomplete.", call. = FALSE)
   }
+  recursive_state_saturation_fraction <- if (recursive_state_count) {
+    recursive_saturated_count / recursive_state_count
+  } else {
+    NA_real_
+  }
   list(qhat = qhat, median_qhat = median_qhat, score_local = score_local,
-    full_time_index = full_time, origin_index = origin, horizon = horizon)
+    full_time_index = full_time, origin_index = origin, horizon = horizon,
+    recursive_state_saturation_fraction = recursive_state_saturation_fraction,
+    recursive_state_max_abs = recursive_state_max_abs,
+    recursive_state_finite = recursive_state_finite)
 }
 
 app_joint_swq_score_fit <- function(fixture, candidate, base_contract, origin_indices, stage, root) {
@@ -211,6 +234,20 @@ app_joint_swq_score_fit <- function(fixture, candidate, base_contract, origin_in
     fit <- app_joint_swq_fit_al(design, normal, controls, 0.5, init, controls$median_max_iter)
     median_fit <- fit
     initialization_source <- "matched_normal_rhs_vb"
+  } else if (stage == "t1") {
+    source_dir <- app_joint_swq_worker_dir(root, "m1", candidate$m1_worker_id[[1L]])
+    normal <- readRDS(file.path(source_dir, "normal_initializer.rds"))
+    median_fit <- readRDS(file.path(source_dir, "fit_initializer.rds"))
+    tau <- as.numeric(candidate$tau[[1L]])
+    init <- median_fit
+    k <- match(tau, normal$initializer$tau)
+    if (is.na(k) || !tau %in% c(0.05, 0.95)) {
+      stop("Tail sentinel requires tau 0.05 or 0.95 from the normal initializer.", call. = FALSE)
+    }
+    init$alpha_mean <- normal$initializer$alpha_mean[[k]]
+    init$sigma_mean <- max(median_fit$sigma_mean[[1L]], normal$initializer$sigma_mean[[k]])
+    fit <- app_joint_swq_fit_al(design, normal, controls, tau, init, controls$quantile_max_iter)
+    initialization_source <- "verified_matched_median_and_normal_initializer"
   } else {
     source_dir <- app_joint_swq_worker_dir(root, "m1", candidate$m1_worker_id[[1L]])
     normal <- readRDS(file.path(source_dir, "normal_initializer.rds"))
@@ -250,6 +287,9 @@ app_joint_swq_score_fit <- function(fixture, candidate, base_contract, origin_in
     calibration_check_loss_sd = stats::sd(check),
     calibration_oracle_quantile_mae = mean(abs(oracle)),
     calibration_oracle_quantile_rmse = sqrt(mean(oracle^2)),
+    recursive_state_saturation_fraction = pred$recursive_state_saturation_fraction,
+    recursive_state_max_abs = pred$recursive_state_max_abs,
+    recursive_state_finite = pred$recursive_state_finite,
     converged = isTRUE(fit$converged),
     convergence_status = if (isTRUE(fit$converged)) "pass" else "review_max_iter",
     iterations = as.integer(fit$iterations_completed %||% fit$iterations %||% NA_integer_),

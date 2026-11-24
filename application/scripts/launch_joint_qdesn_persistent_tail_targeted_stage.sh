@@ -18,6 +18,7 @@ case "$STAGE" in
   h1) PLAN=h1_worker_plan.csv; ID=h1_worker_id ;;
   h2) PLAN=h2_worker_plan.csv; ID=h2_worker_id ;;
   m1) PLAN=median_al_worker_plan.csv; ID=median_worker_id ;;
+  t1) PLAN=tail_al_worker_plan.csv; ID=tail_worker_id ;;
   *) echo "Unsupported stage: $STAGE" >&2; exit 2 ;;
 esac
 

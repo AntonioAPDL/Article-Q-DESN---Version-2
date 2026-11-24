@@ -13,7 +13,11 @@ candidates <- app_read_csv(file.path(root, "candidate_registry.csv"))
 fixtures <- app_read_csv(file.path(root, "fixture_manifest.csv"))
 if (!all(manifest$verified) || nrow(candidates) != target$candidate_count ||
     any(candidates$scenario_id != target$scenario_id) || max(candidates$rho_requested_max) > 1.2 ||
-    !any(candidates$rho_requested_max > 1) || any(fixtures$protected_rows_persisted != 0L)) {
+    sum(candidates$rho_requested_max >= 1) != target$supercritical_count ||
+    any(candidates$rho_requested_max[candidates$candidate_role != "supercritical_rho"] >= 1) ||
+    nrow(app_read_csv(file.path(root, "r1a_worker_plan.csv"))) !=
+      target$candidate_count * target$calibration_replicates ||
+    any(fixtures$protected_rows_persisted != 0L)) {
   stop("Persistent-tail targeted preparation check failed.", call. = FALSE)
 }
 health <- app_joint_pht_health(root)

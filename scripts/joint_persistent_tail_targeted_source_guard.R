@@ -13,7 +13,7 @@ app_joint_pht_source_constants <- function() {
     extension_manifest = paste0("docs/reproducibility/",
       "joint_qdesn_persistent_tail_targeted_screen_sources_20261124.csv"),
     extension_manifest_sha256 =
-      "1031d32423427cecd1b1587c6af30f437586dd739bfc39a961a71394b14fa1d6",
+      "5aa8a67a4e8938979d2a0966821b058231cc2d834ae03d049a80afadfd0f56b5",
     scopes = c("application/R", "application/config", "application/scripts",
       "application/cpp", "validation")
   )
@@ -27,10 +27,10 @@ app_joint_pht_source_structure <- function(manifest) {
   require <- app_joint_pht_source_require
   require(identical(names(manifest), c("path", "role", "mode", "sha256", "blob")),
     "extension manifest schema is exact")
-  require(nrow(manifest) == 11L && !anyNA(manifest) &&
+  require(nrow(manifest) == 13L && !anyNA(manifest) &&
     !anyDuplicated(manifest$path) &&
     identical(manifest$path, sort(manifest$path, method = "radix")),
-    "extension manifest contains exactly eleven sorted unique paths")
+    "extension manifest contains exactly thirteen sorted unique paths")
   require(all(manifest$role == "joint_persistent_tail_targeted_screen"),
     "extension roles cannot broaden authorization")
   require(all(manifest$mode %in% c("100644", "100755")) &&
@@ -104,7 +104,7 @@ app_check_joint_pht_sources <- function(repo_root,
     git(c("diff", "--cached", "--no-ext-diff", "--no-renames", "--name-only",
       constants$baseline, "--", constants$scopes)))
   check(setequal(changes, manifest$path) && length(changes) == nrow(manifest),
-    "scientific delta from corrected authority is exactly eleven paths")
+    "scientific delta from corrected authority is exactly thirteen paths")
   untracked <- git(c("ls-files", "--others", "--", constants$scopes))
   untracked <- untracked[!grepl("(^|/)__pycache__/[^/]+[.]pyc$", untracked)]
   check(length(untracked) == 0L, "untracked scientific implementations are not authorized")

@@ -1,6 +1,6 @@
 section,name,value,type,description
-identity,contract_version,joint_qdesn_persistent_tail_targeted_screen_v1,character,Focused stronger-window screening contract for the persistent-heavy-tail scenario.
-identity,run_tag,joint_qdesn_persistent_tail_targeted_screen_20261124,character,Ignored Jerez runtime tag.
+identity,contract_version,joint_qdesn_persistent_tail_targeted_screen_v2,character,Final focused stronger-window screening contract for the persistent-heavy-tail scenario.
+identity,run_tag,joint_qdesn_persistent_tail_targeted_screen_v2_20261124,character,Ignored Jerez runtime tag.
 scope,scenario_id,persistent_heavy_tail,character,The only scenario authorized for this campaign.
 scope,selection_unit,scenario_specific,character,No cross-scenario or universal DESN selection is permitted.
 scope,protected_selection_forbidden,true,logical,Protected outcomes cannot tune candidates or tau0.
@@ -22,13 +22,21 @@ screen,reservoir_seed_offsets,0;101;202,integer_vector,Frozen reservoir-seed rob
 rhs,coarse_tau0_grid,0.00000001;0.0000000316227766;0.0000001;0.000000316227766;0.000001;0.00000316227766;0.00001;0.0000316227766;0.0001;0.000316227766;0.001;0.00316227766;0.01;0.0316227766;0.1;0.316227766;1;3.16227766;10;31.6227766;100;316.227766;1000,numeric_vector,Half-decade normal-RHS scale grid spanning 1e-8 through 1e3.
 rhs,h1_advance_count,12,integer,Architecture-scale pairs receiving local tau0 refinement.
 rhs,local_log10_offsets,-0.375;-0.25;-0.125;0;0.125;0.25;0.375,numeric_vector,Eighth-decade local refinement around each H1 winner.
+rhs,lower_boundary_tau0_values,0.00000000316227766;0.000000001;0.000000000316227766;0.0000000001,numeric_vector,Predeclared outward refinement when the coarse lower boundary wins.
 rhs,refinement_min_tau0,0.0000000001,numeric,Smallest admissible refined tau0.
 rhs,refinement_max_tau0,1000,numeric,Largest admissible refined tau0.
 rhs,h2_advance_count,8,integer,Architecture-scale pairs entering median-AL confirmation.
 quantile,median_tau,0.5,numeric,Focused AL quantile used before any seven-grid continuation.
-quantile,stop_after_median,true,logical,Seven-grid VB and all MCMC require a separate reviewed campaign.
+quantile,tail_tau,0.05;0.95,numeric_vector,Outer-tail AL sentinels fitted after the matched median.
+quantile,tail_score_weights,0.25;0.50;0.25,numeric_vector,Normalized trapezoidal weights for lower median and upper sentinel scores.
+quantile,stop_after_median,false,logical,Median completion prepares but never launches the tail-sentinel stage.
+quantile,stop_after_tail,true,logical,Seven-grid VB and all MCMC require a separate reviewed campaign.
 gates,maximum_rhs_dimension,600,integer,Maximum readout dimension admitted to RHS and median AL.
+gates,joint_quantile_levels,7,integer,Number of levels in the eventual joint model.
+gates,maximum_joint_dense_dimension,600,integer,Verified dense joint-backend ceiling applied before RHS screening.
 gates,max_state_saturation,0.25,numeric,Review threshold for saturated reservoir states.
+gates,initial_state_perturbation_scale,0.000001,numeric,Deterministic R2 perturbation applied to supercritical origin states.
+gates,max_initial_state_score_relative_change,0.01,numeric,Maximum admissible R2 score sensitivity to the state perturbation.
 gates,require_finite_scores,true,logical,Every retained score must be finite.
 gates,minimum_mean_improvement,0,numeric,Any positive internal mean improvement may advance subject to hard gates.
 runtime,required_hostname,jerez.be.ucsc.edu,character,Production stages are authorized only on Jerez.

@@ -13,8 +13,8 @@ local({
   checks <- env$app_check_joint_pht_sources(root)
   stopifnot(
     length(attr(checks, "prior_authorized_paths")) == 8L,
-    length(attr(checks, "extension_authorized_paths")) == 11L,
-    length(attr(checks, "authorized_paths")) == 19L
+    length(attr(checks, "extension_authorized_paths")) == 13L,
+    length(attr(checks, "authorized_paths")) == 21L
   )
   rejected <- 0L
   reject <- function(expr) {

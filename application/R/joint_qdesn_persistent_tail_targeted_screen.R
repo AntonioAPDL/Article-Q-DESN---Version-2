@@ -9,7 +9,7 @@ app_joint_pht_axes_path <- function() {
 }
 
 app_joint_pht_default_root <- function() {
-  app_path("application/cache/joint_qdesn_persistent_tail_targeted_screen_20261124")
+  app_path("application/cache/joint_qdesn_persistent_tail_targeted_screen_v2_20261124")
 }
 
 app_joint_pht_value <- function(tab, name) {
@@ -54,14 +54,23 @@ app_joint_pht_read_contract <- function(
   out$rhs_tau0_grid <- numvec("coarse_tau0_grid")
   out$h1_advance_count <- as.integer(value("h1_advance_count"))
   out$local_log10_offsets <- numvec("local_log10_offsets")
+  out$lower_boundary_tau0_values <- numvec("lower_boundary_tau0_values")
   out$refinement_min_tau0 <- as.numeric(value("refinement_min_tau0"))
   out$refinement_max_tau0 <- as.numeric(value("refinement_max_tau0"))
   out$h2_advance_count <- as.integer(value("h2_advance_count"))
   out$median_tau <- as.numeric(value("median_tau"))
+  out$tail_tau <- numvec("tail_tau")
+  out$tail_score_weights <- numvec("tail_score_weights")
   out$stop_after_median <- bool("stop_after_median")
+  out$stop_after_tail <- bool("stop_after_tail")
   out$ordinary_promotion_dimension <- as.integer(value("maximum_rhs_dimension"))
   out$max_readout_dimension <- out$ordinary_promotion_dimension
+  out$joint_quantile_levels <- as.integer(value("joint_quantile_levels"))
+  out$maximum_joint_dense_dimension <- as.integer(value("maximum_joint_dense_dimension"))
   out$max_state_saturation <- as.numeric(value("max_state_saturation"))
+  out$initial_state_perturbation_scale <- as.numeric(value("initial_state_perturbation_scale"))
+  out$max_initial_state_score_relative_change <-
+    as.numeric(value("max_initial_state_score_relative_change"))
   out$protected_selection_forbidden <- bool("protected_selection_forbidden")
   out$require_finite_scores <- bool("require_finite_scores")
   out$minimum_mean_improvement <- as.numeric(value("minimum_mean_improvement"))
@@ -73,7 +82,7 @@ app_joint_pht_read_contract <- function(
   out$blas_threads <- as.integer(value("blas_threads"))
   out$nice_level <- as.integer(value("nice_level"))
   out$automatic_downstream_launch <- bool("automatic_downstream_launch")
-  valid <- identical(out$version, "joint_qdesn_persistent_tail_targeted_screen_v1") &&
+  valid <- identical(out$version, "joint_qdesn_persistent_tail_targeted_screen_v2") &&
     identical(out$scenario_id, "persistent_heavy_tail") &&
     out$candidate_count == out$anchor_count + out$local_count +
       out$supercritical_count + out$global_count &&
@@ -83,7 +92,13 @@ app_joint_pht_read_contract <- function(
     out$h1_advance_count > out$h2_advance_count &&
     all(out$r1a_origins %in% out$full_origins) &&
     length(out$reservoir_seed_offsets) == 3L &&
-    out$protected_selection_forbidden && out$stop_after_median &&
+    identical(out$tail_tau, c(0.05, 0.95)) &&
+    identical(out$tail_score_weights, c(0.25, 0.50, 0.25)) &&
+    out$joint_quantile_levels == 7L && out$ordinary_promotion_dimension == 600L &&
+    out$maximum_joint_dense_dimension == 600L &&
+    out$initial_state_perturbation_scale == 1e-6 &&
+    out$max_initial_state_score_relative_change == 0.01 &&
+    out$protected_selection_forbidden && !out$stop_after_median && out$stop_after_tail &&
     !out$automatic_downstream_launch && out$max_workers <= 30L
   if (!valid) stop("Persistent-tail targeted contract is malformed.", call. = FALSE)
   out
@@ -161,10 +176,10 @@ app_joint_pht_candidate_from_point <- function(
     } else {
       axes$rho_range[[1L]] + H[[6L]] * diff(axes$rho_range)
     }
-    center <- pmin(1.2, pmax(0.10, center))
+    center <- pmin(0.999, pmax(0.10, center))
     schedule <- if (identical(role, "global_targeted")) "flat" else
       as.character(app_joint_sw_pick(axes$special_schedule, H[[8L]]))
-    rho <- app_joint_sw_schedule(center, D, schedule, 0.12 * H[[10L]], 0.10, 1.20)
+    rho <- app_joint_sw_schedule(center, D, schedule, 0.12 * H[[10L]], 0.10, 0.999)
   }
   row$rho <- app_joint_sw_fmt(rho)
   row$rho_requested_max <- max(rho)
@@ -189,6 +204,10 @@ app_joint_pht_candidate_registry <- function(
   authority$allow_supercritical_rho <- FALSE
   authority$rho_upper_bound <- 1.2
   authority$enforce_leaky_radius <- TRUE
+  authority$joint_dense_dimension <- contract$joint_quantile_levels *
+    as.integer(authority$retained_state_budget[[1L]])
+  authority$joint_backend_eligible <- authority$joint_dense_dimension <=
+    contract$maximum_joint_dense_dimension
   make_pool <- function(n, skip, role, anchor = NULL) {
     H <- app_joint_sw_halton(n, 14L, skip)
     app_bind_rows_fill(lapply(seq_len(n), function(ii) {
@@ -214,6 +233,10 @@ app_joint_pht_candidate_registry <- function(
     contract$global_count, used)
   out <- app_bind_rows_fill(list(anchors, local, supercritical, global))
   out <- out[order(out$candidate_role, out$structural_signature), , drop = FALSE]
+  out$joint_dense_dimension <- contract$joint_quantile_levels *
+    as.integer(out$retained_state_budget)
+  out$joint_backend_eligible <- out$joint_dense_dimension <=
+    contract$maximum_joint_dense_dimension
   out$candidate_id <- sprintf("persistent_heavy_tail__targeted_%04d", seq_len(nrow(out)))
   out$execution_signature <- vapply(seq_len(nrow(out)), function(ii) {
     app_joint_qvp_sha256_text(paste(out$structural_signature[[ii]], out$reservoir_seed[[ii]],
@@ -221,6 +244,8 @@ app_joint_pht_candidate_registry <- function(
   }, character(1L))
   if (nrow(out) != contract$candidate_count || anyDuplicated(out$structural_signature) ||
       sum(out$candidate_role == "supercritical_rho") != contract$supercritical_count ||
+      sum(out$rho_requested_max >= 1) != contract$supercritical_count ||
+      any(out$rho_requested_max[out$candidate_role != "supercritical_rho"] >= 1) ||
       max(out$rho_requested_max) > 1.2 || !any(out$rho_requested_max > 1)) {
     stop("Targeted candidate allocation failed.", call. = FALSE)
   }
@@ -261,9 +286,9 @@ app_joint_pht_prepare <- function(root = app_joint_pht_default_root()) {
       stringsAsFactors = FALSE)
   }
   fixtures <- app_bind_rows_fill(fixture_rows)
-  rep1 <- fixtures[fixtures$replicate_id == 1L,
-    c("scenario_id", "replicate_id", "dgp_seed", "fixture_path"), drop = FALSE]
-  r1a <- merge(candidates, rep1, by = "scenario_id", all.x = TRUE, sort = FALSE)
+  fixture_plan <- fixtures[, c("scenario_id", "replicate_id", "dgp_seed", "fixture_path"),
+    drop = FALSE]
+  r1a <- merge(candidates, fixture_plan, by = "scenario_id", all.x = TRUE, sort = FALSE)
   r1a$origin_indices <- paste(target$r1a_origins, collapse = ";")
   r1a$r1a_worker_id <- seq_len(nrow(r1a))
   files <- c(
@@ -284,8 +309,9 @@ app_joint_pht_prepare <- function(root = app_joint_pht_default_root()) {
     expected_r2_workers = target$r1b_advance_count * 3L * 3L,
     expected_h1_workers = target$r2_advance_count * length(target$rhs_tau0_grid) * 3L,
     maximum_expected_h2_workers = target$h1_advance_count *
-      (length(target$local_log10_offsets) - 1L) * 3L,
+      (length(target$local_log10_offsets) - 1L + length(target$lower_boundary_tau0_values)) * 3L,
     expected_median_workers = target$h2_advance_count * 3L,
+    expected_tail_workers = target$h2_advance_count * length(target$tail_tau) * 3L,
     protected_rows_used_for_selection = 0L, stringsAsFactors = FALSE)
   readiness <- data.frame(
     status = "PREPARED_NOT_LAUNCHED_JEREZ_R1A_REVIEW_REQUIRED",
@@ -300,7 +326,8 @@ app_joint_pht_prepare <- function(root = app_joint_pht_default_root()) {
     launch_readiness = app_write_csv(readiness, file.path(root, "launch_readiness.csv")))
   app_joint_shared_write_manifest(root, files, filename = "preparation_manifest.csv")
   verified <- app_joint_shared_verify_manifest(root, file.path(root, "preparation_manifest.csv"))
-  if (!all(verified$verified) || nrow(r1a) != target$candidate_count ||
+  if (!all(verified$verified) ||
+      nrow(r1a) != target$candidate_count * target$calibration_replicates ||
       any(fixtures$protected_rows_persisted != 0L)) {
     stop("Targeted campaign preparation verification failed.", call. = FALSE)
   }
@@ -311,11 +338,29 @@ app_joint_pht_prepare <- function(root = app_joint_pht_default_root()) {
 app_joint_pht_aggregate <- function(scores, keys) {
   out <- app_joint_sw_aggregate_scores(scores, keys)
   group <- interaction(scores[, keys, drop = FALSE], drop = TRUE, lex.order = TRUE)
+  finite_max <- function(x) {
+    x <- as.numeric(x)
+    if (!length(x) || !any(is.finite(x))) NA_real_ else max(x[is.finite(x)])
+  }
   diagnostic <- app_bind_rows_fill(lapply(split(scores, group), function(x) {
     row <- x[1L, keys, drop = FALSE]
     cbind(row, data.frame(
       max_state_saturation = if ("state_saturation_fraction" %in% names(x))
-        max(as.numeric(x$state_saturation_fraction), na.rm = TRUE) else NA_real_,
+        finite_max(x$state_saturation_fraction) else NA_real_,
+      max_recursive_state_saturation = if ("recursive_state_saturation_fraction" %in% names(x))
+        finite_max(x$recursive_state_saturation_fraction) else NA_real_,
+      max_recursive_state_abs = if ("recursive_state_max_abs" %in% names(x))
+        finite_max(x$recursive_state_max_abs) else NA_real_,
+      recursive_state_finite_all = if ("recursive_state_finite" %in% names(x))
+        all(app_as_bool_vec(x$recursive_state_finite)) else NA,
+      max_realized_spectral_radius = if ("realized_max_layer_spectral_radius" %in% names(x))
+        finite_max(x$realized_max_layer_spectral_radius) else NA_real_,
+      max_realized_linear_leaky_radius = if ("realized_max_linear_leaky_radius" %in% names(x))
+        finite_max(x$realized_max_linear_leaky_radius) else NA_real_,
+      perturbation_relative_change_max = if ("initial_state_score_relative_change" %in% names(x))
+        finite_max(x$initial_state_score_relative_change) else NA_real_,
+      perturbation_pass_all = if ("initial_state_perturbation_pass" %in% names(x))
+        all(app_as_bool_vec(x$initial_state_perturbation_pass)) else NA,
       protected_rows_loaded_max = max(as.integer(x$protected_rows_loaded), na.rm = TRUE),
       warning_count_total = if ("warning_count" %in% names(x))
         sum(as.integer(x$warning_count), na.rm = TRUE) else 0L,
@@ -335,14 +380,129 @@ app_joint_pht_freeze_manifest <- function(root, files, filename) {
   path
 }
 
-app_joint_pht_select_candidates <- function(x, n, supercritical_quota, saturation_limit) {
+app_joint_pht_reservoir_diagnostics <- function(design) {
+  reservoir <- design$reservoir
+  layer_rho <- vapply(reservoir$W, app_qdesn_spectral_radius, numeric(1L))
+  leaky_rho <- vapply(seq_along(reservoir$W), function(layer) {
+    W <- reservoir$W[[layer]]
+    alpha <- as.numeric(reservoir$alpha[[layer]])
+    app_qdesn_spectral_radius((1 - alpha) * diag(nrow(W)) + alpha * W)
+  }, numeric(1L))
+  data.frame(
+    realized_layer_spectral_radii = paste(format(layer_rho, digits = 17L), collapse = ";"),
+    realized_max_layer_spectral_radius = max(layer_rho),
+    realized_linear_leaky_radii = paste(format(leaky_rho, digits = 17L), collapse = ";"),
+    realized_max_linear_leaky_radius = max(leaky_rho),
+    stringsAsFactors = FALSE)
+}
+
+app_joint_pht_run_worker <- function(root, stage, worker_id) {
+  root <- normalizePath(root, mustWork = TRUE)
+  spec <- app_joint_sw_stage_spec(stage)
+  plan <- app_read_csv(file.path(root, spec[["plan"]]))
+  row <- plan[plan[[spec[["id"]]]] == as.integer(worker_id), , drop = FALSE]
+  if (nrow(row) != 1L) stop("Targeted worker ID is not unique.", call. = FALSE)
+  out <- app_joint_sw_worker_dir(root, stage, worker_id)
+  app_ensure_dir(out)
+  if (file.exists(file.path(out, "DONE")) &&
+      file.exists(file.path(out, "artifact_manifest.csv"))) {
+    return(invisible(out))
+  }
+  base_contract <- app_joint_sw_read_contract(file.path(root, "frozen_contract.csv"))
+  target <- app_joint_pht_read_contract(file.path(root, "frozen_target_contract.csv"))
+  fixture <- readRDS(row$fixture_path[[1L]])
+  origins <- as.integer(strsplit(as.character(row$origin_indices[[1L]]), ";",
+    fixed = TRUE)[[1L]])
+  started <- Sys.time()
+  score_fun <- if (stage %in% c("h1", "h2")) app_joint_sw_score_rhs else
+    app_joint_sw_score_ridge
+  captured <- tryCatch(app_joint_sw_capture_warnings(function() {
+    score_fun(fixture, row, base_contract, origins)
+  }), error = function(e) e)
+  if (inherits(captured, "error")) {
+    failure <- cbind(row, data.frame(status = "failed",
+      error_message = conditionMessage(captured),
+      runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
+      stringsAsFactors = FALSE))
+    app_write_csv(failure, file.path(out, "failure.csv"))
+    writeLines("failed", file.path(out, "FAILED"))
+    return(invisible(out))
+  }
+  result <- captured$value
+  result$summary <- cbind(result$summary,
+    app_joint_pht_reservoir_diagnostics(result$design))
+  is_supercritical <- as.numeric(row$rho_requested_max[[1L]]) >= 1
+  perturbation_change <- NA_real_
+  perturbation_pass <- TRUE
+  if (identical(stage, "r2") && is_supercritical) {
+    perturbed <- app_joint_sw_recursive_gaussian(result$design, fixture, result$fit,
+      base_contract, origins, state_perturbation = target$initial_state_perturbation_scale)
+    perturbed_score <- mean(app_joint_shared_acrps(
+      result$design$y[perturbed$score_local], perturbed$qhat, result$design$tau))
+    reference_score <- as.numeric(result$summary$calibration_acrps_mean[[1L]])
+    perturbation_change <- abs(perturbed_score - reference_score) /
+      max(abs(reference_score), sqrt(.Machine$double.eps))
+    perturbation_pass <- isTRUE(perturbed$recursive_state_finite) &&
+      is.finite(perturbation_change) &&
+      perturbation_change <= target$max_initial_state_score_relative_change
+  }
+  result$summary$initial_state_perturbation_scale <-
+    if (identical(stage, "r2") && is_supercritical) {
+      target$initial_state_perturbation_scale
+    } else {
+      0
+    }
+  result$summary$initial_state_score_relative_change <- perturbation_change
+  result$summary$initial_state_perturbation_pass <- perturbation_pass
+  result$summary$warning_count <- length(captured$warnings)
+  result$summary$warning_messages <- paste(captured$warnings, collapse = " | ")
+  files <- c(
+    summary = app_write_csv(result$summary, file.path(out, "summary.csv")),
+    detail = app_write_csv(result$detail, file.path(out, "calibration_detail.csv")))
+  if (length(captured$warnings)) {
+    files <- c(files, warnings = app_write_csv(data.frame(
+      warning_index = seq_along(captured$warnings),
+      warning_message = captured$warnings, stringsAsFactors = FALSE),
+      file.path(out, "warnings.csv")))
+  }
+  if (!is.null(result$trace) && nrow(result$trace)) {
+    files <- c(files, vb_trace = app_write_csv(result$trace,
+      file.path(out, "vb_trace.csv")))
+  }
+  app_joint_shared_write_manifest(out, files)
+  verified <- app_joint_shared_verify_manifest(out, file.path(out, "artifact_manifest.csv"))
+  if (!all(verified$verified)) stop("Targeted worker artifact verification failed.", call. = FALSE)
+  writeLines("completed", file.path(out, "DONE"))
+  invisible(out)
+}
+
+app_joint_pht_select_candidates <- function(
+  x, n, supercritical_quota, saturation_limit, require_joint_eligible = FALSE
+) {
+  defaults <- list(
+    max_recursive_state_saturation = NA_real_,
+    recursive_state_finite_all = NA,
+    perturbation_pass_all = NA,
+    joint_backend_eligible = TRUE)
+  for (name in names(defaults)) {
+    if (!name %in% names(x)) x[[name]] <- defaults[[name]]
+  }
+  recursive_finite_ok <- is.na(x$recursive_state_finite_all) |
+    (!is.na(x$recursive_state_finite_all) & app_as_bool_vec(x$recursive_state_finite_all))
+  perturbation_ok <- is.na(x$perturbation_pass_all) |
+    (!is.na(x$perturbation_pass_all) & app_as_bool_vec(x$perturbation_pass_all))
   x <- x[x$finite_fraction == 1 & x$protected_rows_loaded_max == 0L &
     is.finite(x$calibration_acrps_mean) &
-    (is.na(x$max_state_saturation) | x$max_state_saturation <= saturation_limit), , drop = FALSE]
+    (is.na(x$max_state_saturation) | x$max_state_saturation <= saturation_limit) &
+    (is.na(x$max_recursive_state_saturation) |
+      x$max_recursive_state_saturation <= saturation_limit) &
+    recursive_finite_ok & perturbation_ok, , drop = FALSE]
+  if (require_joint_eligible) {
+    x <- x[app_as_bool_vec(x$joint_backend_eligible), , drop = FALSE]
+  }
   x <- x[order(x$calibration_acrps_mean, x$calibration_acrps_worst,
     x$calibration_acrps_sd, x$retained_state_budget, x$candidate_id), , drop = FALSE]
-  anchors <- x[grepl("^anchor_", x$candidate_role), , drop = FALSE]
-  anchors <- anchors[!duplicated(anchors$candidate_id), , drop = FALSE]
+  anchors <- x[x$candidate_role == "anchor_authoritative_v3", , drop = FALSE]
   supercritical <- x[x$rho_requested_max >= 1, , drop = FALSE]
   supercritical <- supercritical[!supercritical$candidate_id %in% anchors$candidate_id, , drop = FALSE]
   selected <- app_bind_rows_fill(list(anchors, head(supercritical, supercritical_quota)))
@@ -401,7 +561,7 @@ app_joint_pht_finalize_ridge <- function(root, stage) {
   aggregate <- app_joint_sw_attach_candidate_metadata(root,
     app_joint_pht_aggregate(scores, c("scenario_id", "candidate_id")))
   frontier <- app_joint_pht_select_candidates(aggregate, spec$n, spec$super,
-    target$max_state_saturation)
+    target$max_state_saturation, require_joint_eligible = identical(stage, "r2"))
   if (stage == "r2") {
     registry <- app_read_csv(file.path(root, "candidate_registry.csv"))
     candidates <- registry[registry$candidate_id %in% frontier$candidate_id, , drop = FALSE]
@@ -442,9 +602,13 @@ app_joint_pht_select_pairs <- function(x, n) {
   authority <- x[grepl("anchor_authoritative_v3", x$candidate_role), , drop = FALSE]
   if (!nrow(authority)) stop("Targeted RHS selection lost the authority anchor.", call. = FALSE)
   authority <- authority[which.min(abs(log(authority$rhs_tau0) - log(authority$source_rhs_tau0))), , drop = FALSE]
-  out <- app_bind_rows_fill(list(authority,
-    x[!paste(x$candidate_id, x$rhs_tau0) %in% paste(authority$candidate_id, authority$rhs_tau0), , drop = FALSE]))
-  head(out, n)
+  competitors <- x[x$candidate_id != authority$candidate_id[[1L]], , drop = FALSE]
+  competitors <- competitors[!duplicated(competitors$candidate_id), , drop = FALSE]
+  out <- head(app_bind_rows_fill(list(authority, competitors)), n)
+  if (nrow(out) != n || anyDuplicated(out$candidate_id)) {
+    stop("Targeted RHS shortlist does not contain the required distinct architectures.", call. = FALSE)
+  }
+  out
 }
 
 app_joint_pht_finalize_h1 <- function(root) {
@@ -458,6 +622,9 @@ app_joint_pht_finalize_h1 <- function(root) {
     center <- selected$rhs_tau0[[ii]]
     values <- pmin(target$refinement_max_tau0, pmax(target$refinement_min_tau0,
       center * 10^target$local_log10_offsets))
+    if (abs(log(center) - log(min(target$rhs_tau0_grid))) < 1e-10) {
+      values <- c(values, target$lower_boundary_tau0_values)
+    }
     values <- unique(values)
     values <- values[!vapply(values, function(z) any(abs(log(z) - log(target$rhs_tau0_grid)) < 1e-10), logical(1L))]
     data.frame(scenario_id = target$scenario_id, candidate_id = selected$candidate_id[[ii]],
@@ -522,6 +689,7 @@ app_joint_pht_finalize_h2 <- function(root) {
 
 app_joint_pht_finalize_median <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
+  target <- app_joint_pht_read_contract(file.path(root, "frozen_target_contract.csv"))
   scores <- app_joint_swq_collect(root, "m1")
   proxy <- scores
   proxy$calibration_acrps_mean <- proxy$calibration_median_quantile_score_mean
@@ -530,24 +698,110 @@ app_joint_pht_finalize_median <- function(root) {
   aggregate <- aggregate[order(aggregate$calibration_acrps_mean,
     aggregate$calibration_acrps_worst, aggregate$calibration_acrps_sd), , drop = FALSE]
   aggregate$median_selection_rank <- seq_len(nrow(aggregate))
-  best <- aggregate[1L, , drop = FALSE]
-  authority <- aggregate[grepl("anchor_authoritative_v3", aggregate$candidate_role), , drop = FALSE]
-  if (nrow(authority) != 1L) stop("Median AL closeout requires one authority pair.", call. = FALSE)
-  improvement <- authority$calibration_acrps_mean[[1L]] - best$calibration_acrps_mean[[1L]]
+  plan <- app_read_csv(file.path(root, "median_al_worker_plan.csv"))
+  tail_plan <- merge(plan, data.frame(tau = target$tail_tau), by = NULL)
+  tail_plan$tail_worker_id <- seq_len(nrow(tail_plan))
+  tail_plan$m1_worker_id <- tail_plan$median_worker_id
+  tail_plan$origin_indices <- paste(target$full_origins, collapse = ";")
+  if (nrow(tail_plan) != target$h2_advance_count * target$calibration_replicates *
+      length(target$tail_tau) || anyNA(tail_plan$m1_worker_id)) {
+    stop("Median-to-tail sentinel plan violates its frozen cardinality contract.", call. = FALSE)
+  }
   files <- c(
     scores = app_write_csv(scores, file.path(root, "median_al_scores.csv")),
     aggregate = app_write_csv(aggregate, file.path(root, "median_al_aggregate.csv")),
+    tail_plan = app_write_csv(tail_plan, file.path(root, "tail_al_worker_plan.csv")),
     app_joint_sw_stage_receipts(root, "m1"))
+  app_ensure_dir(file.path(root, "t1_workers"))
   decision <- data.frame(
-    status = "TARGETED_MEDIAN_AL_COMPLETE_STOP_FOR_SCIENTIFIC_REVIEW",
-    best_candidate_id = best$candidate_id[[1L]], best_rhs_tau0 = best$rhs_tau0[[1L]],
-    best_score = best$calibration_acrps_mean[[1L]], authority_score = authority$calibration_acrps_mean[[1L]],
-    mean_improvement = improvement,
-    recommend_seven_grid_confirmation = is.finite(improvement) && improvement > 0,
-    seven_grid_launched = FALSE, mcmc_launched = FALSE, protected_rows_used = 0L,
+    status = "TARGETED_MEDIAN_AL_COMPLETE_READY_FOR_TAIL_SENTINEL_REVIEW",
+    selected_pairs = nrow(aggregate), tail_workers = nrow(tail_plan),
+    tail_launched = FALSE, seven_grid_launched = FALSE, mcmc_launched = FALSE,
+    protected_rows_used = 0L,
     stringsAsFactors = FALSE)
   files <- c(files, decision = app_write_csv(decision, file.path(root, "median_al_decision.csv")))
   app_joint_pht_freeze_manifest(root, files, filename = "median_al_manifest.csv")
+  decision
+}
+
+app_joint_pht_tail_sentinel_score <- function(losses, weights = c(0.25, 0.50, 0.25)) {
+  losses <- as.numeric(losses)
+  weights <- as.numeric(weights)
+  if (length(losses) != 3L || length(weights) != 3L ||
+      any(!is.finite(c(losses, weights))) || any(weights < 0) ||
+      abs(sum(weights) - 1) > 1e-12) {
+    stop("Tail sentinel score requires three finite losses and normalized nonnegative weights.",
+      call. = FALSE)
+  }
+  sum(weights * (2 * losses))
+}
+
+app_joint_pht_finalize_tail <- function(root) {
+  root <- normalizePath(root, mustWork = TRUE)
+  target <- app_joint_pht_read_contract(file.path(root, "frozen_target_contract.csv"))
+  median <- app_joint_swq_collect(root, "m1")
+  tail <- app_joint_swq_collect(root, "t1")
+  all_scores <- app_bind_rows_fill(list(median, tail))
+  key_cols <- c("scenario_id", "candidate_id", "rhs_tau0", "replicate_id")
+  key <- interaction(all_scores[, key_cols, drop = FALSE], drop = TRUE, lex.order = TRUE)
+  replicate_scores <- app_bind_rows_fill(lapply(split(all_scores, key), function(x) {
+    x <- x[order(as.numeric(x$tau)), , drop = FALSE]
+    if (!identical(as.numeric(x$tau), c(0.05, 0.50, 0.95))) {
+      stop("Tail sentinel requires exactly tau 0.05, 0.50, and 0.95.", call. = FALSE)
+    }
+    row <- x[1L, key_cols, drop = FALSE]
+    raw_losses <- as.numeric(x$calibration_check_loss_mean)
+    losses <- 2 * raw_losses
+    cbind(row, data.frame(
+      lower_tail_quantile_score = losses[[1L]],
+      median_quantile_score = losses[[2L]],
+      upper_tail_quantile_score = losses[[3L]],
+      three_level_tail_sentinel_score = app_joint_pht_tail_sentinel_score(
+        raw_losses, target$tail_score_weights),
+      protected_rows_loaded = max(as.integer(x$protected_rows_loaded)),
+      stringsAsFactors = FALSE))
+  }))
+  proxy <- replicate_scores
+  proxy$status <- "completed"
+  proxy$runtime_seconds <- 0
+  proxy$peak_rss_kib <- 0
+  proxy$calibration_acrps_mean <- proxy$three_level_tail_sentinel_score
+  aggregate <- app_joint_sw_attach_candidate_metadata(root,
+    app_joint_sw_aggregate_scores(proxy, c("scenario_id", "candidate_id", "rhs_tau0")))
+  aggregate <- aggregate[order(aggregate$calibration_acrps_mean,
+    aggregate$calibration_acrps_worst, aggregate$calibration_acrps_sd,
+    aggregate$candidate_id), , drop = FALSE]
+  aggregate$tail_sentinel_rank <- seq_len(nrow(aggregate))
+  best <- aggregate[1L, , drop = FALSE]
+  authority <- aggregate[aggregate$candidate_role == "anchor_authoritative_v3", , drop = FALSE]
+  if (nrow(authority) != 1L || nrow(replicate_scores) !=
+      target$h2_advance_count * target$calibration_replicates ||
+      any(!is.finite(replicate_scores$three_level_tail_sentinel_score)) ||
+      any(replicate_scores$protected_rows_loaded != 0L)) {
+    stop("Tail sentinel closeout failed authority, cardinality, finiteness, or protection gates.",
+      call. = FALSE)
+  }
+  improvement <- authority$calibration_acrps_mean[[1L]] - best$calibration_acrps_mean[[1L]]
+  files <- c(
+    worker_scores = app_write_csv(all_scores, file.path(root, "tail_sentinel_worker_scores.csv")),
+    replicate_scores = app_write_csv(replicate_scores,
+      file.path(root, "tail_sentinel_score_by_replicate.csv")),
+    aggregate = app_write_csv(aggregate, file.path(root, "tail_sentinel_aggregate.csv")),
+    app_joint_sw_stage_receipts(root, "t1"))
+  decision <- data.frame(
+    status = "THREE_LEVEL_TAIL_SENTINEL_COMPLETE_STOP_FOR_SCIENTIFIC_REVIEW",
+    score_label = "three_level_tail_sentinel_score",
+    best_candidate_id = best$candidate_id[[1L]], best_rhs_tau0 = best$rhs_tau0[[1L]],
+    best_score = best$calibration_acrps_mean[[1L]],
+    authority_score = authority$calibration_acrps_mean[[1L]],
+    mean_improvement = improvement,
+    recommend_seven_grid_confirmation = is.finite(improvement) &&
+      improvement > target$minimum_mean_improvement,
+    seven_grid_launched = FALSE, exal_launched = FALSE, joint_launched = FALSE,
+    mcmc_launched = FALSE, protected_rows_used = 0L, stringsAsFactors = FALSE)
+  files <- c(files, decision = app_write_csv(decision,
+    file.path(root, "tail_sentinel_decision.csv")))
+  app_joint_pht_freeze_manifest(root, files, filename = "tail_sentinel_manifest.csv")
   decision
 }
 
@@ -559,12 +813,15 @@ app_joint_pht_finalize_stage <- function(root, stage) {
     h1 = app_joint_pht_finalize_h1(root),
     h2 = app_joint_pht_finalize_h2(root),
     m1 = app_joint_pht_finalize_median(root),
+    t1 = app_joint_pht_finalize_tail(root),
     stop("Unknown targeted stage.", call. = FALSE))
 }
 
 app_joint_pht_health <- function(root) {
   stages <- c("r1a", "r1b", "r2", "h1", "h2")
   ridge <- app_bind_rows_fill(lapply(stages, function(stage) app_joint_sw_health(root, stage)))
-  median <- app_joint_swq_health(root, "m1")
-  app_bind_rows_fill(list(ridge, median))
+  quantile <- app_bind_rows_fill(lapply(c("m1", "t1"), function(stage) {
+    app_joint_swq_health(root, stage)
+  }))
+  app_bind_rows_fill(list(ridge, quantile))
 }

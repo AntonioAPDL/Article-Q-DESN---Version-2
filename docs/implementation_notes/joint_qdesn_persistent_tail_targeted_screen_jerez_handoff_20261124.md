@@ -7,7 +7,7 @@
 - Base authority: `origin/main` at
   `ce54c280153723f97a2ad46dce33cedefbd8a505`
 - Production runtime tag:
-  `joint_qdesn_persistent_tail_targeted_screen_20261124`
+  `joint_qdesn_persistent_tail_targeted_screen_v2_20261124`
 - Production host: `jerez.be.ucsc.edu`
 - Pinned R: `/data/jaguir26/local/opt/R/4.6.0/bin/Rscript`
 
@@ -35,7 +35,7 @@ do not reset or overwrite it.
 
 ```bash
 R_BIN=/data/jaguir26/local/opt/R/4.6.0/bin/Rscript
-ROOT=$PWD/application/cache/joint_qdesn_persistent_tail_targeted_screen_20261124
+ROOT=$PWD/application/cache/joint_qdesn_persistent_tail_targeted_screen_v2_20261124
 
 git status --short --branch
 git rev-list --left-right --count '@{upstream}...HEAD'
@@ -44,10 +44,10 @@ $R_BIN application/scripts/prepare_joint_qdesn_persistent_tail_targeted_screen.R
 $R_BIN application/scripts/check_joint_qdesn_persistent_tail_targeted_screen.R "$ROOT"
 ```
 
-Expected preparation cardinalities are 1,536 R1a workers, 1,152 R1b workers,
-288 R2 workers, 1,656 H1 workers, at most 216 H2 workers and 24 median-AL
-workers. Preparation must report zero protected rows and must not create a
-running worker.
+Expected preparation cardinalities are 4,608 R1a workers, 1,152 R1b workers,
+288 R2 workers, 1,656 H1 workers, at most 360 H2 workers, 24 median-AL workers,
+and 48 tail-AL workers. The maximum full funnel is 8,136 jobs. Preparation must
+report zero protected rows and must not create a running worker.
 
 ## Capacity selection
 
@@ -86,17 +86,19 @@ $R_BIN application/scripts/finalize_joint_qdesn_persistent_tail_targeted_stage.R
 ```
 
 Verify the stage manifest and decision before launching the next stage. The
-ordered stages are `r1a`, `r1b`, `r2`, `h1`, `h2`, and `m1`. Finalizers never
-launch successors. Resume uses the same command; completed workers are
-manifest-checked and skipped.
+ordered stages are `r1a`, `r1b`, `r2`, `h1`, `h2`, `m1`, and `t1`.
+Finalizers never launch successors. Resume uses the same command; completed
+workers are manifest-checked and skipped.
 
 ## Required stop
 
-Stop after M1. Report the selected and authority median-AL internal scores,
-fixture variability, selected architecture, `rho`, `tau0`, saturation,
-warnings, manifests, storage and runtime. Do not launch seven-grid AL/exAL VB,
-joint fitting, MCMC, protected scoring, article regeneration, integration or
-Overleaf publication from this handoff.
+Stop after T1. Report the separate lower-tail, median and upper-tail losses and
+the `three_level_tail_sentinel_score`, fixture variability, selected
+architecture, requested and realized radii, perturbation sensitivity, `tau0`,
+saturation, warnings, manifests, storage and runtime. Do not label the
+three-level score aCRPS. Do not launch seven-grid AL/exAL VB, joint fitting,
+MCMC, protected scoring, article regeneration, integration or Overleaf
+publication from this handoff.
 
 The ignored runtime must remain on Jerez until a frozen scientific closeout is
 reviewed. Only reproducibility code and metadata belong in Git.

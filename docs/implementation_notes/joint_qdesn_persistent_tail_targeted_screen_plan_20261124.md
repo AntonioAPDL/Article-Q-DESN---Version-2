@@ -8,7 +8,7 @@ Base: freshly fetched `origin/main` at `ce54c280153723f97a2ad46dce33cedefbd8a505
 
 Execution host: Jerez only
 
-Status: prepared and tested; no production worker launched
+Status: v2 implementation and local worker probes verified; no v2 production worker launched
 
 ## Scientific reason
 
@@ -49,29 +49,47 @@ The unchanged axes are depth 1--8, response lags 1--360, widths/shapes,
 leakage 0.005--0.995, input scale, input sparsity and recurrent expected
 degree. Supported state budgets stop at 600.
 
-The spectral-radius range is 0.10--1.20. Exactly 512 of 1,536 R1a candidates
-belong to the explicit `rho >= 1` allocation. Supercritical targets are an
+The spectral-radius range is 0.10--1.20. Exactly 512 of 1,536 candidates
+belong to the explicit `rho >= 1` allocation; every other candidate is
+strictly subcritical (`rho < 1`). Supercritical targets are an
 opt-in experimental contract: the ordinary generator still rejects
 `rho >= 1`; only labeled candidates may request at most 1.20 and bypass the
 leaky-radius contraction that would otherwise silently undo the experiment.
-Tanh states remain bounded, but echo-state stability is not assumed. Finite
-scores and maximum state saturation of 0.25 are advancement gates.
+Tanh states remain bounded, but echo-state stability is not assumed. The
+campaign records requested and realized layer radii, realized linear leaky
+radii, teacher-forced and recursive saturation, recursive maximum absolute
+state, and recursive finiteness. At R2, supercritical candidates receive a
+deterministic `1e-6` origin-state perturbation and cannot advance if their mean
+score changes by more than 1%. Finite scores and maximum state saturation of
+0.25 are advancement gates.
+
+Before normal-RHS screening, candidates must satisfy the future joint-backend
+gate `7 * retained_state_budget <= 600`. Larger candidates remain valid ridge
+evidence but cannot enter H1.
 
 ## Funnel and exact workload
 
 | Stage | Work | Expected jobs | Stop condition |
 |---|---|---:|---|
-| R1a | 1,536 ridge candidates, one fixture, three origins | 1,536 | retain 384, including 96 supercritical |
+| R1a | 1,536 ridge candidates, three fixtures, three origins | 4,608 | retain 384, including 96 supercritical |
 | R1b | 384 candidates, three fixtures, all ten origins | 1,152 | retain 32, including 8 supercritical |
 | R2 | 32 candidates, three fixtures and three reservoir seeds | 288 | retain 24, including 6 supercritical |
 | H1 | 24 architectures x 23 half-decade `tau0` values x 3 fixtures | 1,656 | retain 12 pairs |
-| H2 | six new eighth-decade neighbors x 12 pairs x 3 fixtures | at most 216 | retain 8 pairs |
-| M1 | eight architecture-scale pairs x three fixtures, median AL VB | 24 | stop for scientific review |
+| H2 | boundary-aware local `tau0` neighbors x 12 architectures x 3 fixtures | at most 360 | retain 8 distinct architectures |
+| M1 | eight architecture-scale pairs x three fixtures, median AL VB | 24 | prepare tail sentinels only |
+| T1 | two AL tail levels x eight pairs x three fixtures | 48 | stop for scientific review |
 
-The coarse `tau0` grid spans `1e-8` through `1e3`. H2 evaluates new
-log10 offsets `+-0.125`, `+-0.25`, and `+-0.375` around H1 winners. No
-seven-quantile VB, exAL VB, joint fit or MCMC is authorized by this lane.
-Those expensive stages require evidence that median AL improves the authority.
+The maximum planned workload is 8,136 jobs. The coarse `tau0` grid spans
+`1e-8` through `1e3`. H1 and H2 retain distinct architectures. H2 evaluates
+new log10 offsets `+-0.125`, `+-0.25`, and `+-0.375`; if the H1 winner is at
+the lower boundary, it also evaluates `3.162e-9`, `1e-9`, `3.162e-10`, and
+`1e-10`.
+
+T1 reports separate scores at tau 0.05, 0.50 and 0.95 and the explicitly named
+`three_level_tail_sentinel_score = 0.25(2 L_0.05) + 0.50(2 L_0.50) +
+0.25(2 L_0.95)`. This diagnostic is not aCRPS. No seven-quantile VB, exAL VB,
+joint fit, MCMC, protected scoring, or article replacement is authorized by
+this lane.
 
 ## Jerez execution boundary
 
@@ -100,7 +118,7 @@ Jerez so fixture paths are host-local:
 
 ```bash
 R_BIN=/data/jaguir26/local/opt/R/4.6.0/bin/Rscript
-ROOT=$PWD/application/cache/joint_qdesn_persistent_tail_targeted_screen_20261124
+ROOT=$PWD/application/cache/joint_qdesn_persistent_tail_targeted_screen_v2_20261124
 $R_BIN application/tests/test_joint_qdesn_persistent_tail_targeted_screen.R
 $R_BIN application/scripts/prepare_joint_qdesn_persistent_tail_targeted_screen.R "$ROOT"
 $R_BIN application/scripts/check_joint_qdesn_persistent_tail_targeted_screen.R "$ROOT"
@@ -117,13 +135,15 @@ tmux new-session -d -s joint_pht_r1a_20261124 \
 
 After workers close, run the checker and the stage finalizer. Inspect its
 manifest and decision before separately launching the next stage. Repeat for
-`r1b`, `r2`, `h1`, `h2`, and `m1`. No finalizer launches its successor.
+`r1b`, `r2`, `h1`, `h2`, `m1`, and `t1`. No finalizer launches its successor.
 
-## Decision after M1
+## Decision after T1
 
-Continue to seven-grid AL/exAL VB only when the selected median-AL pair has a
-finite lower mean internal score than the exact authority and does not owe the
-improvement to one fixture, one reservoir seed, state saturation, or a failed
-manifest. Otherwise retain the corrected authority and close this experiment.
-Any later seven-grid result must still receive protected VB and MCMC
-confirmation before article promotion.
+Continue to a separately reviewed seven-grid AL/exAL campaign only when the
+selected pair has a finite lower mean three-level tail sentinel score than the
+exact authority and does not owe the improvement to one fixture, one reservoir
+seed, state sensitivity, state saturation, or a failed manifest. Any positive
+mean improvement is eligible when every hard gate passes; it is not an article
+claim. Otherwise retain the corrected authority and close this experiment.
+Any later result must still receive protected VB and MCMC confirmation before
+article promotion.

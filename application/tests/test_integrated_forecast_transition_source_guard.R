@@ -19,7 +19,7 @@ local({
     source(file.path(root, "scripts/joint_persistent_tail_targeted_source_guard.R"),
       local = TRUE)
     checks <- app_check_joint_pht_sources(root)
-    stopifnot(length(attr(checks, "extension_authorized_paths")) == 11L)
+    stopifnot(length(attr(checks, "extension_authorized_paths")) == 13L)
   } else if (file.exists(final_manifest)) {
     source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
       local = TRUE)

@@ -13,7 +13,14 @@ local({
     "joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv")
   final_manifest <- file.path(root, "docs/reproducibility",
     "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
-  if (file.exists(final_manifest)) {
+  pht_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_persistent_tail_targeted_screen_sources_20261124.csv")
+  if (file.exists(pht_manifest)) {
+    source(file.path(root, "scripts/joint_persistent_tail_targeted_source_guard.R"),
+      local = TRUE)
+    checks <- app_check_joint_pht_sources(root)
+    stopifnot(length(attr(checks, "extension_authorized_paths")) == 11L)
+  } else if (file.exists(final_manifest)) {
     source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
       local = TRUE)
     checks <- app_check_joint_superfinal_final_sources(root)

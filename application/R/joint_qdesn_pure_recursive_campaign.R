@@ -341,6 +341,20 @@ app_joint_pure_reservoir <- function(candidate, m_input,
       sum(n) != retained || retained > max_readout_dimension) {
     stop("Pure-DESN full-state width contract is malformed.", call. = FALSE)
   }
+  allow_supercritical_rho <- "allow_supercritical_rho" %in% names(candidate) &&
+    isTRUE(app_as_bool_vec(candidate$allow_supercritical_rho)[[1L]])
+  rho_upper_bound <- if ("rho_upper_bound" %in% names(candidate)) {
+    as.numeric(candidate$rho_upper_bound[[1L]])
+  } else if (allow_supercritical_rho) {
+    1.2
+  } else {
+    1
+  }
+  enforce_leaky_radius <- if ("enforce_leaky_radius" %in% names(candidate)) {
+    isTRUE(app_as_bool_vec(candidate$enforce_leaky_radius)[[1L]])
+  } else {
+    TRUE
+  }
   app_qdesn_generate_article_reservoir(
     list(reservoir = list(
       D = D, n = n, n_tilde = n_tilde, m = as.integer(m_input),
@@ -348,6 +362,9 @@ app_joint_pure_reservoir <- function(candidate, m_input,
       rho = app_joint_shared_parse_num_vec(candidate$rho[[1L]]),
       pi_w = app_joint_shared_parse_num_vec(candidate$pi_w[[1L]]),
       pi_in = app_joint_shared_parse_num_vec(candidate$pi_in[[1L]]),
+      allow_supercritical_rho = allow_supercritical_rho,
+      rho_upper_bound = rho_upper_bound,
+      enforce_leaky_radius = enforce_leaky_radius,
       w_dist = "uniform", in_dist = "uniform", act_f = "tanh", act_k = "identity"
     )), seed = as.integer(candidate$reservoir_seed[[1L]]), m_input = as.integer(m_input)
   )

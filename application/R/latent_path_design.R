@@ -847,6 +847,10 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   }
   alpha <- as.numeric(unlist(r$alpha %||% 0.3, use.names = FALSE))
   rho <- as.numeric(unlist(r$rho %||% 0.9, use.names = FALSE))
+  allow_supercritical_rho <- isTRUE(r$allow_supercritical_rho %||% FALSE)
+  rho_upper_bound <- as.numeric(r$rho_upper_bound %||%
+    if (allow_supercritical_rho) 1.2 else 1)[[1L]]
+  enforce_leaky_radius <- isTRUE(r$enforce_leaky_radius %||% TRUE)
   pi_w <- as.numeric(unlist(r$pi_w %||% 0.1, use.names = FALSE))
   pi_in <- as.numeric(unlist(r$pi_in %||% 1, use.names = FALSE))
   if (length(alpha) == 1L) alpha <- rep(alpha, D)
@@ -854,7 +858,11 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   if (length(pi_w) == 1L) pi_w <- rep(pi_w, D)
   if (length(pi_in) == 1L) pi_in <- rep(pi_in, D)
   if (length(alpha) != D || any(alpha <= 0 | alpha >= 1)) stop("Invalid reservoir alpha.", call. = FALSE)
-  if (length(rho) != D || any(rho <= 0 | rho >= 1)) stop("Invalid reservoir rho.", call. = FALSE)
+  invalid_rho <- length(rho) != D || any(!is.finite(rho) | rho <= 0) ||
+    if (allow_supercritical_rho) any(rho > rho_upper_bound) else any(rho >= 1)
+  if (invalid_rho || !is.finite(rho_upper_bound) || rho_upper_bound <= 0) {
+    stop("Invalid reservoir rho.", call. = FALSE)
+  }
   if (length(pi_w) != D || any(pi_w <= 0 | pi_w > 1)) stop("Invalid reservoir pi_w.", call. = FALSE)
   if (length(pi_in) != D || any(pi_in <= 0 | pi_in > 1)) stop("Invalid reservoir pi_in.", call. = FALSE)
 
@@ -893,7 +901,9 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
     sr <- suppressWarnings(try(app_qdesn_spectral_radius(W[[d]]), silent = TRUE))
     if (inherits(sr, "try-error") || !is.finite(sr) || sr <= 0) sr <- 1
     W[[d]] <- (rho[[d]] / sr) * W[[d]]
-    W[[d]] <- app_qdesn_enforce_leaky_radius(W[[d]], alpha[[d]])
+    if (enforce_leaky_radius) {
+      W[[d]] <- app_qdesn_enforce_leaky_radius(W[[d]], alpha[[d]])
+    }
   }
   list(
     D = D,
@@ -903,6 +913,9 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
     m_input = as.integer(m_input),
     alpha = alpha,
     rho = rho,
+    allow_supercritical_rho = allow_supercritical_rho,
+    rho_upper_bound = rho_upper_bound,
+    enforce_leaky_radius = enforce_leaky_radius,
     W = W,
     Win = Win,
     Q = Qred,

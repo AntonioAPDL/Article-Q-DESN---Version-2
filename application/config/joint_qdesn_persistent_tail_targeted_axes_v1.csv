@@ -1,0 +1,16 @@
+profile,axis,values,role
+targeted,depth,1;2;3;4;5;6;7;8,screened_unchanged
+targeted,state_budget,20;24;40;48;75;100;150;200;300;450;600,screened_supported
+targeted,width_shape,flat;tapered;expanding;bottleneck;hourglass,screened_unchanged
+targeted,response_lags,1;2;3;5;8;10;12;15;24;30;45;60;75;90;120;150;180;240;300;360,screened_unchanged
+targeted,exogenous_lags,0,not_applicable
+targeted,alpha_range,0.005;0.995,screened_unchanged
+targeted,rho_range,0.10;1.20,screened_extended
+targeted,supercritical_rho,1.00;1.02;1.05;1.08;1.12;1.16;1.20,explicit_quota
+targeted,global_schedule,flat,shared_base_contract
+targeted,special_schedule,flat;increasing;decreasing;u_shape;unconstrained,local_and_supercritical
+targeted,input_scale,0.01;0.03;0.05;0.10;0.25;0.50;1.00;2.00,screened_unchanged
+targeted,pi_in,0.05;0.10;0.25;0.50;1.00,screened_unchanged
+targeted,pi_w_fixed,0.005;0.01;0.02;0.05;0.10;0.20,screened_unchanged
+targeted,recurrent_expected_degree,4;8;16;32;64,screened_unchanged
+targeted,minimum_generated_layer_width,2,fixed

@@ -322,19 +322,18 @@ app_joint_phtff_run_worker <- function(root, worker_id) {
   tmp <- paste0(out, ".tmp_", Sys.getpid())
   unlink(tmp, recursive = TRUE, force = TRUE); app_ensure_dir(tmp)
   started <- Sys.time(); base <- app_joint_sw_read_contract(file.path(root, "frozen_contract.csv"))
-  fixture <- readRDS(if (row$job_type[[1L]] == "oracle") {
-    row$oracle_fixture_path[[1L]]
-  } else row$fixture_path[[1L]])
+  selector_fixture <- readRDS(row$fixture_path[[1L]])
   captured <- tryCatch(app_joint_sw_capture_warnings(function() {
     if (row$job_type[[1L]] == "oracle") {
-      design <- app_joint_pure_build_design(fixture, row, base, selector = TRUE)
+      oracle_fixture <- readRDS(row$oracle_fixture_path[[1L]])
+      design <- app_joint_pure_build_design(selector_fixture, row, base, selector = TRUE)
       map <- app_joint_phtff_forecast_map(design, base)
-      return(list(shard = app_joint_recursive_dgp_shard(fixture, map,
+      return(list(shard = app_joint_recursive_dgp_shard(oracle_fixture, map,
         n_paths = app_joint_phtff_read_contract(file.path(root,
           "frozen_fit_first_contract.csv"))$paths_per_shard,
         seed = row$oracle_seed[[1L]])))
     }
-    result <- app_joint_pht3_fit_full7(fixture, row, base, base$full_origins)
+    result <- app_joint_pht3_fit_full7(selector_fixture, row, base, base$full_origins)
     list(result = result, metrics = app_joint_phtff_fit_metrics(result, base))
   }), error = function(e) e)
   if (inherits(captured, "error")) {

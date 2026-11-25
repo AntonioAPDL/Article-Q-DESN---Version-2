@@ -114,6 +114,9 @@ app_joint_phtff_source_candidates <- function(source_root,
   candidates$fit_first_role[which(!is.na(candidates$source_candidate_id) &
     candidates$source_candidate_id ==
       "persistent_heavy_tail__targeted_0001")] <- "exact_historical_authority"
+  runtime_fields <- c("replicate_id", "dgp_seed", "fixture_path", "median_tau",
+    "origin_indices", "median_worker_id", "tau", "m1_worker_id", "tail_worker_id")
+  candidates <- candidates[, setdiff(names(candidates), runtime_fields), drop = FALSE]
   candidates$source_runtime_root <- normalizePath(source_root, mustWork = TRUE)
   candidates[, c("candidate_id", "fit_first_role",
     setdiff(names(candidates), c("candidate_id", "fit_first_role"))), drop = FALSE]

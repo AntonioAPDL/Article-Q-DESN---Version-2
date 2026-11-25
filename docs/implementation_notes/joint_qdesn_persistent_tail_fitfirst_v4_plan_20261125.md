@@ -56,6 +56,11 @@ finite and stable. Nonfinite functionals, invalid connectivity, unstable
 supercritical recursion, protected-row access, or provenance failure are hard
 failures.
 
+Connectivity is a hard pass when at least one recurrent and one input
+connection are realized. A sparse nilpotent recurrent matrix can have nonzero
+connections but zero spectral radius; that is reported for review rather than
+misclassified as disconnected, because leaky-state memory remains present.
+
 ## Gated funnel
 
 | Stage | Maximum workers | Action |

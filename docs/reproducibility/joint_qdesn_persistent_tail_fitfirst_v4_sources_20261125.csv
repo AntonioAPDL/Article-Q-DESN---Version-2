@@ -1,5 +1,5 @@
 "path","role","mode","sha256","blob"
-"application/R/joint_qdesn_persistent_tail_fitfirst_v4.R","joint_persistent_tail_fitfirst_v4","100644","5867ee7fc1f5aeb34ac02cf3ec48de2054b7a00872a6545c50ebb01d03914a13","19e31ccf73162d20ed230a330879050d98ca1ffe"
+"application/R/joint_qdesn_persistent_tail_fitfirst_v4.R","joint_persistent_tail_fitfirst_v4","100644","6c901806b2cab055b089e916c8ad010be29b3428c8b746a31509f7ebd6eab343","3f2319b4700d31ef2c2fa9aa8ed510cfc908c4fc"
 "application/config/joint_qdesn_persistent_tail_fitfirst_v4_axes.csv","joint_persistent_tail_fitfirst_v4","100644","9deb96a3efdbab633513b941cecb6fea79b2b0943b38d4169c15d8f5f4213519","59e9528f52d037026f152fb6118b5424b1d975ec"
 "application/config/joint_qdesn_persistent_tail_fitfirst_v4_contract.csv","joint_persistent_tail_fitfirst_v4","100644","23141a962976eff6ace241edbd19a4b70a2158e71f6ed4f2e1b19467419cf443","1a1c451c162dd5cb60e90ef2034e1fea143becc4"
 "application/config/joint_qdesn_persistent_tail_fitfirst_v4_controls.csv","joint_persistent_tail_fitfirst_v4","100644","29122c7ce692ba2ea18b78ea848ebf33f713e7ec744129de0dd374cd5149a991","e0a39a0698ebbcad95e135517246826af10463b2"

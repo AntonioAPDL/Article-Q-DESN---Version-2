@@ -832,6 +832,11 @@ app_joint_pht4_run_worker <- function(root, stage, worker_id) {
   }
   result$summary$initial_state_score_relative_change <- perturbation_change
   result$summary$initial_state_perturbation_pass <- perturbation_pass
+  connectivity_pass <- reservoir$recurrent_nonzero_connections[[1L]] > 0L &&
+    reservoir$input_nonzero_connections[[1L]] > 0L
+  result$summary$connectivity_hard_pass <- connectivity_pass
+  result$summary$zero_realized_radius_review <-
+    reservoir$realized_max_layer_spectral_radius[[1L]] <= 0
   finite_columns <- grep("(mae|rmse|score|finite)$", names(result$summary), value = TRUE)
   functional_finite <- all(vapply(result$summary[finite_columns], function(x) {
     if (is.logical(x)) all(!is.na(x) & x) else all(is.finite(as.numeric(x)))
@@ -840,7 +845,7 @@ app_joint_pht4_run_worker <- function(root, stage, worker_id) {
   result$summary$convergence_review_only <- any(grepl("review", as.character(
     result$summary$convergence_status %||% "pass")))
   result$summary$hard_functional_pass <- functional_finite && recursive_finite &&
-    isTRUE(reservoir$realized_connectivity_pass[[1L]]) && perturbation_pass &&
+    connectivity_pass && perturbation_pass &&
     result$summary$protected_rows_loaded[[1L]] == 0L
   result$summary$screening_eligible <- result$summary$hard_functional_pass
   result$summary$warning_count <- length(captured$warnings)

@@ -5,7 +5,7 @@ app_joint_pht4_source_constants <- function() {
     parent_head = "79360949b56e4a93d998c971d9129bf125ef6abc",
     manifest = paste0("docs/reproducibility/",
       "joint_qdesn_persistent_tail_fitfirst_v4_sources_20261125.csv"),
-    manifest_sha256 = "695d1fa713c8afa13df4aa4eac43f003facac52fe5f9b829a066c3ef3f32988b",
+    manifest_sha256 = "1d859fddfb0745e28cc1fa4cddd037186f3481003f397b6d137f3d1dacdbc653",
     expected_paths = 11L,
     scopes = c("application/R", "application/config", "application/scripts",
       "application/cpp", "validation")

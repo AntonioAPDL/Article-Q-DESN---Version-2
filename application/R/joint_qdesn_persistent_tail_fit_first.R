@@ -133,10 +133,31 @@ app_joint_phtff_fixture_row <- function(sc, registry, contract, replicate_id, ro
     app_joint_sw_read_contract(file.path(root, "frozen_contract.csv")))
   path <- file.path(root, "fixtures", sprintf("fit_first_rep%02d.rds", replicate_id))
   saveRDS(selector, path, version = 3L, compress = "xz")
+  oracle_end <- length(selector$y_history)
+  oracle_fixture <- list(
+    scenario_id = fixture$scenario_id,
+    y = fixture$y[seq_len(oracle_end)],
+    mu = fixture$mu[seq_len(oracle_end)],
+    sigma = fixture$sigma[seq_len(oracle_end)],
+    registry_row = row,
+    seed = fixture$seed,
+    seed_role = fixture$seed_role,
+    protected_rows_persisted = 0L)
+  if (any(vapply(oracle_fixture[c("y", "mu", "sigma")], length, integer(1L)) !=
+      oracle_end) || any(!is.finite(c(oracle_fixture$y, oracle_fixture$mu,
+        oracle_fixture$sigma))) || any(oracle_fixture$sigma <= 0)) {
+    stop("Fit-first oracle-only fixture is malformed.", call. = FALSE)
+  }
+  oracle_path <- file.path(root, "fixtures",
+    sprintf("fit_first_oracle_rep%02d.rds", replicate_id))
+  saveRDS(oracle_fixture, oracle_path, version = 3L, compress = "xz")
   data.frame(scenario_id = contract$scenario_id, replicate_id = replicate_id,
     dgp_seed = row$seed[[1L]], seed_role = row$seed_role[[1L]],
     fixture_path = normalizePath(path, mustWork = TRUE),
     size_bytes = file.info(path)$size, sha256 = app_sha256_file(path),
+    oracle_fixture_path = normalizePath(oracle_path, mustWork = TRUE),
+    oracle_size_bytes = file.info(oracle_path)$size,
+    oracle_sha256 = app_sha256_file(oracle_path),
     protected_rows_persisted = selector$protected_rows_persisted,
     article_fixture = FALSE, stringsAsFactors = FALSE)
 }
@@ -172,12 +193,13 @@ app_joint_phtff_prepare <- function(source_root, root = app_joint_phtff_default_
     app_joint_phtff_fixture_row(sc, registry, contract, rep, root)
   }))
   fit_plan <- merge(candidates, fixtures[, c("scenario_id", "replicate_id", "dgp_seed",
-    "fixture_path")], by = "scenario_id", all = TRUE, sort = FALSE)
+    "fixture_path", "oracle_fixture_path")], by = "scenario_id", all = TRUE, sort = FALSE)
   fit_plan$job_type <- "fit"
   fit_plan$oracle_shard_id <- NA_integer_
   fit_plan$oracle_seed <- NA_integer_
   oracle_plan <- fixtures[rep(seq_len(nrow(fixtures)), each = contract$shards_per_fixture),
-    c("scenario_id", "replicate_id", "dgp_seed", "fixture_path"), drop = FALSE]
+    c("scenario_id", "replicate_id", "dgp_seed", "fixture_path", "oracle_fixture_path"),
+    drop = FALSE]
   oracle_plan$job_type <- "oracle"
   oracle_plan$oracle_shard_id <- rep(seq_len(contract$shards_per_fixture),
     times = nrow(fixtures))
@@ -190,6 +212,7 @@ app_joint_phtff_prepare <- function(source_root, root = app_joint_phtff_default_
   template$replicate_id <- oracle_plan$replicate_id
   template$dgp_seed <- oracle_plan$dgp_seed
   template$fixture_path <- oracle_plan$fixture_path
+  template$oracle_fixture_path <- oracle_plan$oracle_fixture_path
   template$oracle_shard_id <- oracle_plan$oracle_shard_id
   template$oracle_seed <- oracle_plan$oracle_seed
   jobs <- app_bind_rows_fill(list(template, fit_plan))
@@ -299,7 +322,9 @@ app_joint_phtff_run_worker <- function(root, worker_id) {
   tmp <- paste0(out, ".tmp_", Sys.getpid())
   unlink(tmp, recursive = TRUE, force = TRUE); app_ensure_dir(tmp)
   started <- Sys.time(); base <- app_joint_sw_read_contract(file.path(root, "frozen_contract.csv"))
-  fixture <- readRDS(row$fixture_path[[1L]])
+  fixture <- readRDS(if (row$job_type[[1L]] == "oracle") {
+    row$oracle_fixture_path[[1L]]
+  } else row$fixture_path[[1L]])
   captured <- tryCatch(app_joint_sw_capture_warnings(function() {
     if (row$job_type[[1L]] == "oracle") {
       design <- app_joint_pure_build_design(fixture, row, base, selector = TRUE)
@@ -462,7 +487,7 @@ app_joint_phtff_finalize <- function(root = app_joint_phtff_default_root()) {
     block <- oracle_plan[oracle_plan$replicate_id == rep, , drop = FALSE]
     shard_paths <- vapply(block$worker_id, function(id) file.path(
       app_joint_phtff_worker_dir(root, id), "oracle_shard.rds"), character(1L))
-    fixture <- readRDS(block$fixture_path[[1L]])
+    fixture <- readRDS(block$oracle_fixture_path[[1L]])
     oracle <- app_joint_recursive_combine_oracle_shards(shard_paths, fixture, base$tau,
       app_joint_shared_weights(base$tau), contract$analytic_tolerance,
       contract$split_half_tolerance)

@@ -1,0 +1,41 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_fit_first_v1,character,Fit-first continuation of the frozen persistent-heavy-tail V3 shortlist.
+identity,run_tag,joint_qdesn_persistent_tail_fit_first_20261125,character,Ignored Jerez runtime tag.
+identity,parent_branch,work/joint-qdesn-persistent-tail-exploration-v3-20261124,character,Frozen source branch.
+identity,parent_head,4f54ea14d58a3d1caacf244ae525f1bb8a8dd648,character,Frozen source HEAD.
+identity,source_runtime_head,517f5926e2a636889f28ded2c5bb02702beb95d4,character,HEAD recorded when the immutable V3 runtime was prepared.
+identity,source_run_tag,joint_qdesn_persistent_tail_exploration_v3_20261124,character,Frozen source runtime tag.
+scope,scenario_id,persistent_heavy_tail,character,Only scenario authorized for this continuation.
+scope,selection_unit,scenario_specific,character,No universal DESN specification is selected.
+scope,protected_selection_forbidden,true,logical,Article outcomes cannot enter selection.
+scope,article_fixture_materialization_forbidden,true,logical,The final article fixture remains untouched.
+screen,source_candidate_count,10,integer,Complete V3 tail shortlist including exact controls.
+screen,fresh_replicates,5,integer,Fresh internal fixtures for fit-first confirmation.
+screen,fresh_seed_offset,50000,integer,Offset from the scenario selector seed base.
+screen,full_origin_indices,1;2;3;4;5;6;7;8;9;10,integer_vector,Teacher-forced rolling origins.
+screen,horizon_groups,1;2-5;6-15;16-30,character_vector,Frozen recursive horizon summaries.
+oracle,shards_per_fixture,8,integer,Independent origin-marginal DGP oracle shards.
+oracle,paths_per_shard,4096,integer,Paths per oracle shard.
+oracle,analytic_tolerance,0.01,numeric,Maximum horizon-one analytic relative discrepancy.
+oracle,split_half_tolerance,0.005,numeric,Maximum oracle split-half relative discrepancy.
+selection,fit_relative_margin,0.25,numeric,Relative margin from the best mean training quantile-path MAE.
+selection,fit_absolute_margin,0.02,numeric,Minimum absolute fit margin.
+selection,h1_relative_margin,0.25,numeric,Relative margin from the best mean teacher-forced horizon-one MAE.
+selection,h1_absolute_margin,0.03,numeric,Minimum absolute horizon-one margin.
+selection,tail_relative_margin,0.35,numeric,Relative margin from the best mean outer-tail fit MAE.
+selection,tail_absolute_margin,0.04,numeric,Minimum absolute outer-tail margin.
+selection,forecast_near_tie_relative_margin,0.01,numeric,Relative origin-marginal aCRPS near-tie margin.
+selection,forecast_near_tie_absolute_margin,0.005,numeric,Minimum absolute origin-marginal aCRPS near-tie margin.
+selection,short_horizon_relative_guard,0.05,numeric,Maximum relative deterioration over horizons one through five.
+selection,minimum_fit_eligible_candidates,1,integer,At least one specification must pass fit competence.
+gates,require_finite_outputs,true,logical,All retained functionals must be finite.
+gates,require_zero_contract_crossings,true,logical,Contracted grids cannot cross.
+gates,require_recursive_state_finite,true,logical,Recursive reservoir states must remain finite.
+gates,require_verified_source_manifests,true,logical,Frozen V3 manifests must verify before preparation.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Production execution host.
+runtime,max_physical_workers,30,integer,Maximum distinct physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum Jerez data-disk headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,automatic_downstream_launch,false,logical,Finalization freezes and stops before four-model confirmation.

@@ -44,4 +44,15 @@ detail$qhat <- seq_len(nrow(detail))
 matrix <- app_joint_phtff_matrix_from_detail(detail, "qhat", c(0.05, 0.5, 0.95))
 stopifnot(identical(dim(matrix), c(6L, 3L)))
 
-cat("JOINT_PERSISTENT_TAIL_FIT_FIRST_TEST_PASS expectations=18 production_runs=0\n")
+registry <- app_joint_qdesn_load_simulation_registry()
+registry <- registry[registry$scenario_id == "persistent_heavy_tail", , drop = FALSE]
+stopifnot(nrow(registry) == 1L)
+oracle_fixture <- list(mu = c(-0.5, 0.25), sigma = c(1, 2), registry_row = registry)
+tau <- c(0.05, 0.5, 0.95)
+truth <- app_joint_phtff_oracle_true_q(oracle_fixture, tau)
+standardized <- app_joint_qvp_registry_standardized_quantile(tau, registry)
+stopifnot(identical(dim(truth), c(2L, 3L)),
+  max(abs(truth - (matrix(oracle_fixture$mu, 2L, 3L) +
+    oracle_fixture$sigma %o% standardized))) < 1e-12)
+
+cat("JOINT_PERSISTENT_TAIL_FIT_FIRST_TEST_PASS expectations=20 production_runs=0\n")

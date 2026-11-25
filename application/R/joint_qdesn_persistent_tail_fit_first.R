@@ -409,6 +409,29 @@ app_joint_phtff_subset_oracle <- function(oracle, index) {
   out
 }
 
+app_joint_phtff_oracle_true_q <- function(fixture, tau) {
+  required <- c("mu", "sigma", "registry_row")
+  missing <- required[!vapply(required, function(name) !is.null(fixture[[name]]), logical(1L))]
+  if (length(missing)) {
+    stop(sprintf("Fit-first oracle fixture is missing: %s.", paste(missing, collapse = ", ")),
+      call. = FALSE)
+  }
+  mu <- as.numeric(fixture$mu)
+  sigma <- as.numeric(fixture$sigma)
+  tau <- as.numeric(tau)
+  if (!length(mu) || length(sigma) != length(mu) || !length(tau) ||
+      any(!is.finite(c(mu, sigma, tau))) || any(sigma <= 0) ||
+      any(tau <= 0 | tau >= 1)) {
+    stop("Fit-first oracle truth inputs are malformed.", call. = FALSE)
+  }
+  standardized <- app_joint_qvp_registry_standardized_quantile(tau, fixture$registry_row)
+  truth <- matrix(mu, nrow = length(mu), ncol = length(tau)) + sigma %o% standardized
+  if (!identical(dim(truth), c(length(mu), length(tau))) || any(!is.finite(truth))) {
+    stop("Fit-first oracle truth reconstruction failed.", call. = FALSE)
+  }
+  truth
+}
+
 app_joint_phtff_apply_selection <- function(aggregate, contract) {
   required <- c("candidate_id", "fit_first_role", "fit_oracle_quantile_mae_mean",
     "horizon1_oracle_quantile_mae_mean", "fit_outer_tail_mae_max_mean",
@@ -487,6 +510,7 @@ app_joint_phtff_finalize <- function(root = app_joint_phtff_default_root()) {
     shard_paths <- vapply(block$worker_id, function(id) file.path(
       app_joint_phtff_worker_dir(root, id), "oracle_shard.rds"), character(1L))
     fixture <- readRDS(block$oracle_fixture_path[[1L]])
+    fixture$true_q <- app_joint_phtff_oracle_true_q(fixture, base$tau)
     oracle <- app_joint_recursive_combine_oracle_shards(shard_paths, fixture, base$tau,
       app_joint_shared_weights(base$tau), contract$analytic_tolerance,
       contract$split_half_tolerance)

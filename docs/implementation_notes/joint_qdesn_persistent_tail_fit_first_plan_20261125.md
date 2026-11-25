@@ -64,10 +64,10 @@ thread per worker, and no competing Jerez model process.
 - [x] Implement atomic preparation, workers, health checks, and finalization.
 - [x] Add fit, horizon-one, tail, recursive, crossing, and DGP score diagnostics.
 - [x] Add focused synthetic selection tests.
-- [ ] Verify the frozen V3 runtime on Jerez and prepare the new runtime.
-- [ ] Launch the 90-worker fit-first campaign after the capacity gate passes.
-- [ ] Finalize and audit the candidate decision.
-- [ ] Only then freeze the separate four-model confirmation contract.
+- [x] Verify the frozen V3 runtime on Jerez and prepare the new runtime.
+- [x] Launch and complete the 90-worker fit-first campaign after the capacity gate passes.
+- [x] Finalize and audit the candidate decision.
+- [x] Stop after selecting the exact V2 fallback; no four-model confirmation is authorized.
 
 No article file, main branch, Overleaf branch, or unrelated scientific lane is
 modified by this continuation.

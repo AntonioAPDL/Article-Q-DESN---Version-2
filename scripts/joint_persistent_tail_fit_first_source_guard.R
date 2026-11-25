@@ -13,7 +13,7 @@ app_joint_phtff_source_constants <- function() {
     extension_manifest = paste0("docs/reproducibility/",
       "joint_qdesn_persistent_tail_fit_first_sources_20261125.csv"),
     extension_manifest_sha256 =
-      "9862f3f04919ef6d0fc385e258354ed0ae7d897c138bbbf8c72fef0982f82352",
+      "b32c5e0a240640bf66bb092d08c6a3100e7a8e1b5825d3219193e98b7fdb80ab",
     scopes = c("application/R", "application/config", "application/scripts",
       "application/cpp", "validation")
   )

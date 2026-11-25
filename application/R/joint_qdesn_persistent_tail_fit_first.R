@@ -590,7 +590,9 @@ app_joint_phtff_finalize <- function(root = app_joint_phtff_default_root()) {
     aggregate = app_write_csv(selected$table, file.path(root, "fit_first_candidate_aggregate.csv")),
     limits = app_write_csv(selected$limits, file.path(root, "fit_first_selection_limits.csv")),
     oracle = app_write_csv(diagnostics, file.path(root, "oracle_diagnostics.csv")),
-    decision = app_write_csv(decision, file.path(root, "fit_first_decision.csv")))
+    decision = app_write_csv(decision, file.path(root, "fit_first_decision.csv")),
+    finalization_git = app_write_csv(app_joint_shared_git_state(),
+      file.path(root, "fit_first_finalization_git_state.csv")))
   app_joint_shared_write_manifest(root, files, filename = "fit_first_final_manifest.csv")
   verified <- app_joint_shared_verify_manifest(root,
     file.path(root, "fit_first_final_manifest.csv"))

@@ -1,0 +1,61 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_fitfirst_v4,character,Fit-first persistent-heavy-tail super-screen contract.
+identity,run_tag,joint_qdesn_persistent_tail_fitfirst_v4_20261125,character,Ignored Jerez runtime tag.
+identity,parent_branch,work/joint-qdesn-persistent-tail-fit-first-20261125,character,Frozen scientific continuation parent.
+identity,parent_head,79360949b56e4a93d998c971d9129bf125ef6abc,character,Frozen fit-first closeout commit.
+scope,scenario_id,persistent_heavy_tail,character,Only authorized scenario.
+scope,protected_selection_forbidden,true,logical,Protected outcomes cannot be loaded by screening workers.
+scope,automatic_downstream_launch,false,logical,Every stage freezes and stops for review.
+screen,candidate_count,8192,integer,Deterministic architecture registry size.
+screen,candidate_signature_sha256,683e2139ae77ed3f263ddddddd2756ecf959fb6982a14d68a6bbad1ee874d2a1,character,Frozen ordered structural-signature hash.
+screen,control_count,32,integer,Named historical controls.
+screen,local_count,2048,integer,Local fit-oriented proposals.
+screen,layered_count,2048,integer,Heterogeneous layered proposals.
+screen,long_memory_count,1536,integer,Long-memory mechanism proposals.
+screen,supercritical_count,1024,integer,Stable supercritical proposals.
+screen,high_capacity_count,1024,integer,Ridge-only high-capacity diagnostics.
+screen,global_count,480,integer,Global unseen safeguard proposals.
+screen,r1_advance_count,1024,integer,R1 candidates entering complete-origin ridge evaluation.
+screen,r2_advance_count,128,integer,R2 candidates entering seed robustness.
+screen,r3_advance_count,64,integer,Promotable seed-robust architectures entering RHS.
+screen,h1_advance_count,24,integer,Distinct architecture-scale pairs entering slab refinement.
+screen,h2_advance_count,20,integer,Distinct architecture-prior pairs entering median AL.
+screen,m1_advance_count,12,integer,Median-capable pairs entering tail evaluation.
+screen,t1_advance_count,6,integer,Maximum challengers entering sealed qualification.
+screen,r1_origin_indices,1;5;10,integer_vector,Early internal origins.
+screen,full_origin_indices,1;2;3;4;5;6;7;8;9;10,integer_vector,Complete internal rolling origins.
+screen,discovery_replicates,3,integer,Broad-screen fixtures.
+screen,tail_replicates,5,integer,Fresh extreme-tail fixtures.
+screen,sealed_replicates,5,integer,Sealed three-level qualification fixtures.
+screen,discovery_seed_offset,50000,integer,Disjoint discovery seed offset.
+screen,tail_seed_offset,60000,integer,Disjoint tail seed offset.
+screen,sealed_seed_offset,70000,integer,Disjoint sealed seed offset.
+screen,reservoir_seed_offsets,0;101;202,integer_vector,Seed-robustness offsets.
+prior,rhs_tau0_values,0.0000000001;0.00000001;0.000001;0.0001;0.01;1;100;1000;10000;100000,numeric_vector,Nonredundant RHS global scales.
+prior,rhs_zeta2_values,learned;0.01;0.10;0.25;1;4;16;64,character_vector,Slab profiles.
+prior,al_tau0_multipliers,0.001;0.01;0.10;0.50;1;2;10;100,numeric_vector,AL scales relative to selected normal RHS.
+fit,rhs_max_iter,500,integer,Maximum normal RHS VB iterations.
+fit,rhs_min_iter,50,integer,Minimum normal RHS VB iterations.
+fit,rhs_tolerance,0.001,numeric,Normal RHS VB stopping tolerance.
+fit,al_max_iter,500,integer,Maximum median and tail AL VB iterations.
+fit,al_tolerance,0.001,numeric,AL VB stopping tolerance.
+fit,median_fit_relative_margin,0.10,numeric,Anchor-relative median-fit tolerance.
+fit,median_fit_absolute_margin,0.005,numeric,Anchor-absolute median-fit tolerance.
+fit,tail_fit_relative_margin,0.15,numeric,Anchor-relative separate-tail tolerance.
+fit,tail_fit_absolute_margin,0.015,numeric,Anchor-absolute separate-tail tolerance.
+fit,horizon1_relative_margin,0.15,numeric,Anchor-relative horizon-one tolerance.
+fit,horizon1_absolute_margin,0.015,numeric,Anchor-absolute horizon-one tolerance.
+fit,forecast_near_tie_relative_margin,0.01,numeric,Matched forecast near-tie tolerance.
+fit,forecast_near_tie_absolute_margin,0.005,numeric,Matched forecast near-tie tolerance.
+gates,maximum_rhs_dimension,600,integer,Maximum promotable penalized readout dimension.
+gates,maximum_joint_dense_dimension,600,integer,Future seven-level dense backend ceiling.
+gates,maximum_ridge_dimension,2000,integer,Maximum ridge-only diagnostic state budget.
+gates,max_initial_state_score_relative_change,0.01,numeric,Supercritical perturbation gate.
+gates,initial_state_perturbation_scale,0.000001,numeric,Supercritical perturbation size.
+gates,require_finite_scores,true,logical,Nonfinite functionals fail.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Authorized production host.
+runtime,max_physical_workers,30,integer,Maximum reviewed physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum data-disk headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.

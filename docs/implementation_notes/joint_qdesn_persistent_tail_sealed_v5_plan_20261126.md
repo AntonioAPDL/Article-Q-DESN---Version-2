@@ -81,8 +81,8 @@ this lane.
 - [x] Enforce separate fit and horizon-one gates in the V5 finalizer.
 - [x] Report matched contrasts and descriptive intervals without equivalence claims.
 - [x] Add atomic workers, plan hashes, capacity gates, and manifest verification.
-- [ ] Pass focused, inherited V4, RHS, and DGP-score tests under R 4.6.0.
-- [ ] Commit and push the dedicated V5 branch; create a clean Jerez worktree.
-- [ ] Verify and materialize the untouched sealed panel.
-- [ ] Launch exactly 15 workers, monitor startup, and finalize only after 15/15 pass.
-- [ ] Freeze and push the result handoff without merging main or updating Overleaf.
+- [x] Pass focused, inherited V4, posterior-contract, and DGP-score tests under R 4.6.0.
+- [x] Commit and push the dedicated V5 branch; create a clean Jerez worktree.
+- [x] Verify and materialize the untouched sealed panel.
+- [x] Launch exactly 15 workers, monitor startup, and finalize only after 15/15 pass.
+- [x] Freeze and push the result handoff without merging main or updating Overleaf.

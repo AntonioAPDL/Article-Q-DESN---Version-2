@@ -686,7 +686,26 @@ app_joint_pht6_select_qualification <- function(triplets,
     contract = app_joint_pht6_read_contract()) {
   controls <- triplets[triplets$triplet_role == "v5_frozen_control", , drop = FALSE]
   pool <- triplets[triplets$triplet_role != "v5_frozen_control", , drop = FALSE]
-  selected <- head(pool, max(0L, contract$qualification_triplets - nrow(controls)))
+  slots <- max(0L, contract$qualification_triplets - nrow(controls))
+  quota <- floor(slots / 3L)
+  forecast <- pool[order(pool$screen_dgp_score,
+    pmax(pool$screen_lower_fit_mae, pool$screen_upper_fit_mae), pool$triplet_id), , drop = FALSE]
+  fit <- pool[order(pmax(pool$screen_lower_fit_mae, pool$screen_upper_fit_mae),
+    pool$screen_dgp_score, pool$triplet_id), , drop = FALSE]
+  h1 <- pool[order(pmax(pool$screen_lower_horizon1_mae, pool$screen_upper_horizon1_mae),
+    pool$screen_dgp_score, pool$triplet_id), , drop = FALSE]
+  selected <- app_bind_rows_fill(list(head(forecast, quota), head(fit, quota), head(h1, quota)))
+  selected <- selected[!duplicated(selected$triplet_id), , drop = FALSE]
+  if (nrow(selected) < slots) {
+    rank_score <- rank(pool$screen_dgp_score, ties.method = "min") +
+      rank(pmax(pool$screen_lower_fit_mae, pool$screen_upper_fit_mae), ties.method = "min") +
+      rank(pmax(pool$screen_lower_horizon1_mae, pool$screen_upper_horizon1_mae), ties.method = "min")
+    fill <- pool[order(rank_score, pool$triplet_id), , drop = FALSE]
+    fill <- fill[!fill$triplet_id %in% selected$triplet_id, , drop = FALSE]
+    selected <- app_bind_rows_fill(list(selected, head(fill, slots - nrow(selected))))
+  }
+  selected$qualification_selection_role <- "balanced_forecast_fit_horizon1_quota"
+  controls$qualification_selection_role <- "frozen_v5_control"
   out <- app_bind_rows_fill(list(selected, controls))
   out <- out[!duplicated(out$triplet_id), , drop = FALSE]
   head(out, contract$qualification_triplets)

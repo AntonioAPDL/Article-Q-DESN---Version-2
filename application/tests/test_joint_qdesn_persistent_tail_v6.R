@@ -79,6 +79,21 @@ stopifnot(aggregate$strict_forecast_improvement[aggregate$triplet_id == "forecas
   aggregate$score_noninferior[aggregate$triplet_id == "fit"],
   !aggregate$hard_eligible[aggregate$triplet_id == "bad"])
 
+quota_pool <- do.call(rbind, lapply(1:15, function(i) {
+  x <- triplet
+  x$triplet_id <- paste0("quota_", i)
+  x$triplet_role <- if (i > 12) "v5_frozen_control" else "screen_best_by_architecture"
+  x$screen_dgp_score <- i / 100
+  x$screen_lower_fit_mae <- x$screen_upper_fit_mae <- (13 - pmin(i, 12)) / 100
+  x$screen_lower_horizon1_mae <- x$screen_upper_horizon1_mae <- abs(i - 6) / 100
+  x
+}))
+quota_selected <- app_joint_pht6_select_qualification(quota_pool, contract)
+stopifnot(nrow(quota_selected) == 12L,
+  sum(quota_selected$qualification_selection_role == "frozen_v5_control") == 3L,
+  sum(quota_selected$qualification_selection_role ==
+    "balanced_forecast_fit_horizon1_quota") == 9L)
+
 launcher <- paste(readLines(file.path(repo_root, "application", "scripts",
   "launch_joint_qdesn_persistent_tail_v6_stage.sh"), warn = FALSE), collapse = "\n")
 stopifnot(grepl("<= 15", launcher, fixed = TRUE), grepl("taskset -c", launcher, fixed = TRUE),
@@ -86,4 +101,4 @@ stopifnot(grepl("<= 15", launcher, fixed = TRUE), grepl("taskset -c", launcher, 
   grepl("QUALIFICATION_COMPLETE_SEALED_AUTHORIZED", launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v6_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V6_TEST_PASS expectations=39 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V6_TEST_PASS expectations=42 production_runs=0\n")

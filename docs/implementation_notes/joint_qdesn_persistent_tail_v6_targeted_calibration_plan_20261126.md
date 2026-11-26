@@ -32,7 +32,9 @@ protected evaluation window, or alter the V5 packet.
 - Tail AL multipliers: 0.0001 through 1000 on a 15-point logarithmic grid.
 - Median AL multipliers: 0.001, 0.01, 0.1, 1, and 100.
 - Selection metrics: quantile-path fit MAE first, then horizon-one behavior and recursive
-  DGP-integrated finite-grid quantile score.
+   DGP-integrated finite-grid quantile score. The nine non-control qualification slots are balanced
+   across forecast-score, worst-tail-fit, and worst-tail-horizon-one quotas; duplicate selections are
+   filled by an equal-rank composite of the three criteria.
 - Convergence is review-level when functionals are finite and stable; it is not a score-improvement
   veto by itself.
 - Any strict eligible mean-score improvement may advance. Interval overlap is not formal

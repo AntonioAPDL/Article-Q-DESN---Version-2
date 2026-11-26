@@ -71,6 +71,9 @@ gate.
   PriceFM R processes, clean and upstream-synchronized V6 execution branch.
 - Runtime is ignored. Worker summaries, details, compact initializers, warnings, DONE markers, and
   SHA-256 manifests are written atomically.
+- Downstream plans strip all upstream metric columns. The collector retains the final occurrence of
+  a duplicated header so that legacy worker packets with appended fresh metrics can be audited and
+  repaired without rerunning scientifically valid fits.
 - V4 and V5 inputs are accepted only at the six hashes pinned in the V6 contract.
 - Production outputs are not article authority and are not integrated while the campaign is active.
 

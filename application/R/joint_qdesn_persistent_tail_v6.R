@@ -129,7 +129,11 @@ app_joint_pht6_collect <- function(root, stage) {
     dir <- app_joint_pht6_worker_dir(root, stage, id)
     verified <- app_joint_shared_verify_manifest(dir, file.path(dir, "artifact_manifest.csv"))
     if (!nrow(verified) || any(!verified$verified)) stop("V6 worker manifest failed.", call. = FALSE)
-    app_read_csv(file.path(dir, "summary.csv"))
+    summary <- app_read_csv(file.path(dir, "summary.csv"))
+    if (anyDuplicated(names(summary))) {
+      summary <- summary[, !duplicated(names(summary), fromLast = TRUE), drop = FALSE]
+    }
+    summary
   }))
 }
 
@@ -378,6 +382,7 @@ app_joint_pht6_run_component <- function(fixture, row, base, origins) {
 }
 
 app_joint_pht6_score_triplet_component <- function(fixture, candidate, base, origins, tau) {
+  candidate <- app_joint_pht6_drop_stale_metrics(candidate)
   design <- app_joint_pure_build_design(fixture, candidate, base, selector = TRUE)
   median_prior <- app_joint_pht6_prior_row(candidate, 0.5)
   median_controls <- app_joint_pht3_quantile_controls(base, median_prior)
@@ -436,6 +441,22 @@ app_joint_pht6_score_triplet_component <- function(fixture, candidate, base, ori
     fit = app_joint_shared_quantile_compact_fit(fit),
     median_fit = app_joint_shared_quantile_compact_fit(median_fit),
     normal_initializer = list(target = target_normal, median = median_normal), design = design)
+}
+
+app_joint_pht6_drop_stale_metrics <- function(x) {
+  stale <- c("status", "method", "tau", "n_train", "n_calibration_scored",
+    "protected_rows_loaded", "calibration_check_loss_mean", "calibration_check_loss_sd",
+    "dgp_expected_quantile_score", "companion_median_fit_mae",
+    "companion_median_horizon1_mae", "companion_median_recursive_mae",
+    "companion_median_dgp_expected_quantile_score", "calibration_oracle_quantile_mae",
+    "calibration_oracle_quantile_rmse", "training_quantile_mae",
+    "training_quantile_rmse", "horizon1_quantile_mae", "horizon1_5_quantile_mae",
+    "recursive_quantile_mae", "quantile_functionals_finite", "recursive_state_finite",
+    "recursive_state_saturation_fraction", "recursive_state_max_abs", "median_converged",
+    "converged", "convergence_status", "iterations", "runtime_seconds", "peak_rss_kib",
+    "connectivity_hard_pass", "convergence_review_only", "hard_functional_pass",
+    "screening_eligible", "warning_count", "warning_messages", "runtime_seconds_total")
+  x[, setdiff(names(x), stale), drop = FALSE]
 }
 
 app_joint_pht6_prior_row <- function(candidate, tau) {
@@ -715,7 +736,8 @@ app_joint_pht6_component_plan <- function(triplets, fixtures, stage, origins) {
   rows <- list(); at <- 0L
   for (i in seq_len(nrow(triplets))) for (j in seq_len(nrow(fixtures))) for (tau in c(0.05, 0.5, 0.95)) {
     at <- at + 1L
-    x <- app_joint_pht6_prior_row(triplets[i, , drop = FALSE], tau)
+    x <- app_joint_pht6_prior_row(app_joint_pht6_drop_stale_metrics(
+      triplets[i, , drop = FALSE]), tau)
     x$replicate_id <- fixtures$replicate_id[[j]]
     x$dgp_seed <- fixtures$dgp_seed[[j]]
     x$fixture_path <- fixtures$fixture_path[[j]]

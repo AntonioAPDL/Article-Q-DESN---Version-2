@@ -53,7 +53,15 @@ fixtures <- data.frame(replicate_id = 1:3, dgp_seed = 101:103,
 plan <- app_joint_pht6_component_plan(triplet, fixtures, "qualification", 1:10)
 stopifnot(nrow(plan) == 9L, identical(plan$qualification_worker_id, 1:9),
   all(table(plan$replicate_id) == 3L), all(table(plan$tau) == 3L),
-  all(plan$origin_indices == "1;2;3;4;5;6;7;8;9;10"))
+  all(plan$origin_indices == "1;2;3;4;5;6;7;8;9;10"),
+  !"training_quantile_mae" %in% names(plan),
+  !"dgp_expected_quantile_score" %in% names(plan))
+
+duplicate_summary <- data.frame(training_quantile_mae = 9,
+  training_quantile_mae = 1, check.names = FALSE)
+duplicate_summary <- duplicate_summary[, !duplicated(names(duplicate_summary), fromLast = TRUE),
+  drop = FALSE]
+stopifnot(ncol(duplicate_summary) == 1L, duplicate_summary$training_quantile_mae == 1)
 
 make_replicates <- function(id, candidate, role, score, fit_scale = 1, hard = TRUE,
     crossing = 0L) data.frame(triplet_id = id, candidate_id = candidate,
@@ -101,4 +109,4 @@ stopifnot(grepl("<= 15", launcher, fixed = TRUE), grepl("taskset -c", launcher, 
   grepl("QUALIFICATION_COMPLETE_SEALED_AUTHORIZED", launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v6_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V6_TEST_PASS expectations=42 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V6_TEST_PASS expectations=47 production_runs=0\n")

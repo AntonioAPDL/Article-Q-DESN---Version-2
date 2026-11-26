@@ -1,0 +1,49 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_v6,character,Targeted tail-prior calibration contract.
+identity,run_tag,joint_qdesn_persistent_tail_v6_20261126,character,Ignored Jerez runtime tag.
+source,v4_head,beedc227c0c40b2f4b77e0130f89c90bf1adc2da,character,Frozen V4 closeout commit.
+source,v5_head,3a89fa103b273cd23cd3a2416ba44ff5b8fe4492,character,Frozen V5 closeout commit.
+source,v4_h2_sha256,488c04e533db0a53d814581134e6ff4dc17b11ddd5533b50740d8c759e74f192,character,V4 H2 aggregate.
+source,v4_m1_sha256,1940bc0b56de19c9b8ab7f801520eb1f453e5d904c1fc789a415a5c2d62a554a,character,V4 M1 aggregate.
+source,v4_candidates_sha256,f5cfa1837aceabfd357008a0f2fae7adbc9594ebfac564f48ce671dafa52ef54,character,V4 architecture registry.
+source,v5_decision_sha256,23690e7b4ce3e9f3ff23d4b450417df9103a6499910fbac26eb6623d8923677e,character,V5 terminal decision.
+source,v5_summary_sha256,be670367dc80f11cfc51ea2cd31b48bae897c059d7ced49f24ba38903a2245e6,character,V5 profile summary.
+source,v5_finalists_sha256,f2d70d3c54fd7beb03be60ed23823d1bbcb9173bdb9eecdbd6502dfcfa28a61d,character,V5 frozen finalists.
+scope,scenario_id,persistent_heavy_tail,character,Only authorized scenario.
+scope,v5_winner_id,persistent_heavy_tail__fitfirst_v4_3242,character,V5 confirmed baseline.
+scope,v5_secondary_id,persistent_heavy_tail__fitfirst_v4_2430,character,V5 median-fit control.
+scope,exact_candidate_id,persistent_heavy_tail__fitfirst_v4_0002,character,Exact V2 control.
+scope,quantile_grid_three,0.05;0.50;0.95,numeric_vector,Three-level calibration grid.
+scope,quantile_grid_seven,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Current seven-level grid.
+scope,origin_indices_screen,1;5;10,integer_vector,Cheap screen origins.
+scope,origin_indices_full,1;2;3;4;5;6;7;8;9;10,integer_vector,Full internal origins.
+scope,protected_selection_forbidden,true,logical,Protected outcomes cannot be loaded.
+scope,automatic_downstream_launch,false,logical,Every stage finalizes and stops.
+screen,profiles_per_architecture,2,integer,Maximum replayed H2 profiles per architecture.
+screen,tail_multipliers,0.0001;0.0003;0.001;0.003;0.01;0.03;0.1;0.3;1;3;10;30;100;300;1000,numeric_vector,Tail-specific AL scales.
+screen,median_multipliers,0.001;0.01;0.1;1;100,numeric_vector,Reduced median scale screen.
+screen,qualification_triplets,12,integer,Maximum triplets entering complete origins.
+screen,qualification_replicates,3,integer,Fresh complete-origin fixtures.
+screen,sealed_challengers,2,integer,Maximum new challengers entering sealed confirmation.
+screen,sealed_replicates,10,integer,Fresh sealed matched fixtures.
+screen,seven_replicates,5,integer,Fresh seven-level confirmation fixtures.
+screen,sentinel_seed_offset,80000,integer,Sentinel seed offset.
+screen,screen_seed_offset,81000,integer,Tail-screen seed offset.
+screen,qualification_seed_offset,82000,integer,Qualification seed offset.
+screen,sealed_seed_offset,83000,integer,Sealed seed offset.
+screen,seven_seed_offset,84000,integer,Seven-level seed offset.
+decision,median_fit_relative_margin,0.01,numeric,V5-relative median fit safeguard.
+decision,median_fit_absolute_margin,0.001,numeric,V5-relative median fit safeguard.
+decision,horizon1_relative_margin,0.05,numeric,V5-relative horizon-one safeguard.
+decision,horizon1_absolute_margin,0.005,numeric,V5-relative horizon-one safeguard.
+decision,fit_frontier_improvement,0.10,numeric,Required worst-tail fit improvement.
+decision,score_noninferiority_relative,0.01,numeric,Fit-frontier score margin.
+decision,score_noninferiority_absolute,0.005,numeric,Fit-frontier score margin.
+decision,promote_any_strict_mean_improvement,true,logical,Any eligible strict score improvement advances.
+decision,interval_overlap_is_equivalence,false,logical,Interval overlap is not equivalence.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Authorized production host.
+runtime,max_physical_workers,15,integer,Maximum distinct physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum data-disk headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.

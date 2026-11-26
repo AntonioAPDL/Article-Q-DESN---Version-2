@@ -1,0 +1,34 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_sealed_v5,character,Sealed confirmation contract for the two V4-qualified challengers and exact V2.
+identity,run_tag,joint_qdesn_persistent_tail_sealed_v5_20261126,character,Ignored Jerez runtime tag.
+source,source_branch,work/joint-qdesn-persistent-tail-fitfirst-v4-20261125,character,Frozen V4 source branch.
+source,source_head,beedc227c0c40b2f4b77e0130f89c90bf1adc2da,character,Frozen V4 closeout commit.
+source,source_manifest_sha256,de557d364a8736f7c4b2ac41f14a533c207ca7c24096feebcd2de14ad816d10f,character,V4 T1 gate-failure packet manifest.
+source,source_decision_sha256,84f5cf8b9fd97ca2ea05887df1c9a47cb5e58f55bfa6253b1b5fb8e062d43639,character,V4 terminal decision.
+source,source_challengers_sha256,fb1956f61b311fdfd9ba7e2420a1b178c2cd82d36050aafd0ee95e3c5788ad77,character,V4 two-qualified-challenger evidence.
+source,source_exact_sha256,6f04150449e23604719ccc1d4ba7fdc1dbf56eed81bdeb80d5a25dfb9e61fdbf,character,V4 exact-control evidence.
+scope,scenario_id,persistent_heavy_tail,character,Only authorized scenario.
+scope,challenger_ids,persistent_heavy_tail__fitfirst_v4_3242;persistent_heavy_tail__fitfirst_v4_2430,character_vector,Exactly the two V4-qualified challengers.
+scope,exact_candidate_id,persistent_heavy_tail__fitfirst_v4_0002,character,Exact V2 matched control.
+scope,quantile_grid,0.05;0.50;0.95,numeric_vector,Three-level qualification grid.
+scope,sealed_replicates,5,integer,Fresh untouched matched DGP fixtures.
+scope,full_origin_indices,1;2;3;4;5;6;7;8;9;10,integer_vector,Complete internal rolling origins.
+scope,expected_workers,15,integer,Three profiles by five fixtures.
+scope,protected_selection_forbidden,true,logical,Protected outcomes cannot be loaded.
+scope,automatic_downstream_launch,false,logical,V5 freezes and stops after confirmation.
+decision,primary_metric,dgp_integrated_three_level_score,character,Known-DGP integrated finite-grid score.
+decision,promote_any_strict_mean_improvement,true,logical,Any strict eligible mean improvement may authorize continuation.
+decision,interval_overlap_is_equivalence,false,logical,Interval overlap is descriptive uncertainty and not equivalence.
+decision,require_zero_contract_crossings,true,logical,Contract crossings are a hard failure.
+fit,median_fit_relative_margin,0.10,numeric,Exact-anchor relative median-fit tolerance.
+fit,median_fit_absolute_margin,0.005,numeric,Exact-anchor absolute median-fit tolerance.
+fit,tail_fit_relative_margin,0.15,numeric,Exact-anchor relative separate-tail tolerance.
+fit,tail_fit_absolute_margin,0.015,numeric,Exact-anchor absolute separate-tail tolerance.
+fit,horizon1_relative_margin,0.15,numeric,Exact-anchor relative horizon-one tolerance.
+fit,horizon1_absolute_margin,0.015,numeric,Exact-anchor absolute horizon-one tolerance.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Authorized production host.
+runtime,physical_workers,15,integer,One worker per distinct physical core.
+runtime,min_data_free_gib,80,numeric,Minimum data-disk headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.

@@ -94,9 +94,10 @@ be offered to the integration coordinator.
 - [x] Add fit, H1, recursive-score, crossing, and functional gates.
 - [x] Add Jerez physical-core and capacity preflight.
 - [x] Add focused tests and real disposable sentinel/seven-level smoke fits.
-- [ ] Commit and push the dedicated V6 source branch.
-- [ ] Prepare and verify the ignored production root on Jerez.
-- [ ] Run and finalize the sentinel.
-- [ ] Launch the component screen only if the sentinel authorizes it.
-- [ ] Continue later stages only after their frozen predecessor decisions.
-- [ ] Freeze the terminal scientific packet and provide one final integration handoff if warranted.
+- [x] Commit and push the dedicated V6 source branch.
+- [x] Prepare and verify the ignored production root on Jerez.
+- [x] Run and finalize the sentinel.
+- [x] Launch the component screen only after the sentinel authorized it.
+- [x] Continue later stages only after their frozen predecessor decisions.
+- [x] Freeze the terminal V6 packet and its verified Muscat mirror.
+- [ ] Run the separately frozen complete-model VB/MCMC continuation before any article integration.

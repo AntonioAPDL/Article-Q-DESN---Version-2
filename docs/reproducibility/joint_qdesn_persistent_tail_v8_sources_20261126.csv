@@ -1,6 +1,6 @@
 "path","role","mode","sha256","blob"
-"application/R/joint_qdesn_persistent_tail_v8_joint_prior.R","joint_persistent_tail_v8","100644","ee8a0017b5b5eaa28d8b7470a41f596b3ca97010fabb0dbbe2ba251b898f9c1a","d0a04aa6ee100032f60d2bf036b7819eee220233"
-"application/config/joint_qdesn_persistent_tail_v8_contract.csv","joint_persistent_tail_v8","100644","ca4709dffb48c9114212605d9dc913ccb8d8a9e0eafe52da2b642b117fc0b18a","84e9fae2ff29b740fb37f6f8b537fa95982d2635"
+"application/R/joint_qdesn_persistent_tail_v8_joint_prior.R","joint_persistent_tail_v8","100644","672cc3cc5df05abca528d3f530b2458300c38eebfaa9f877d487f16a29efc865","16b231b63f943b56eaab683f3814ea2089a83154"
+"application/config/joint_qdesn_persistent_tail_v8_contract.csv","joint_persistent_tail_v8","100644","982686e38b31265568e9b53b89b65ec002759b562398009d5fdac3111324259f","dd17b7c1f45c0ee4ff117c2875eeb194c3b59632"
 "application/scripts/_joint_qdesn_persistent_tail_v8_bootstrap.R","joint_persistent_tail_v8","100755","3a70940a71908b5ce341fcd69fb05b98f19ea7f5f734723a336c74ea51f7c2af","f18fc78a2c5b5675ddb37dce80a17be897c1d4c0"
 "application/scripts/check_joint_qdesn_persistent_tail_v8.R","joint_persistent_tail_v8","100755","5c175229a04d2c76cc9ef888940b398b73b579415579c24fb10138d6d4989083","9033022002b9de428f72d26cd881b1f57afef24a"
 "application/scripts/finalize_joint_qdesn_persistent_tail_v8_stage.R","joint_persistent_tail_v8","100755","1bcd6c5c2cb7a857daf03d104556649393b107226017ea62f19f60fb0de305ee","3a4e8e4aa771d65b1f21006a85219bfb9fbc7f76"

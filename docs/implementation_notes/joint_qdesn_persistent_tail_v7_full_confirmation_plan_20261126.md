@@ -37,16 +37,32 @@ pretend that independent and joint parameterizations are identical.
 
 - [x] Audit V6, current authority, corrected AL kernel, exact-M0 dispatch, forecast policy, and score contract.
 - [x] Freeze the V7 contract and source hashes.
-- [ ] Prepare one 17-component VB packet and verify the protected design without scoring it.
-- [ ] Run and finalize the VB packet.
-- [ ] Freeze 12 MCMC workers, three for each of four model cells.
-- [ ] Run AL with the corrected unbounded inverse-gamma update and exAL with exact M0.
-- [ ] Verify target/kernel identities, finite draws, and zero contract crossings.
-- [ ] Produce eight score rows: VB and MCMC for all four models.
-- [ ] Compare the four candidate MCMC rows with the four corrected authority rows.
-- [ ] Promote only as a complete scenario packet when at least one mean score improves and all four
+- [x] Prepare one 17-component VB packet and verify the protected design without scoring it.
+- [x] Run and finalize the VB packet.
+- [x] Freeze 12 MCMC workers, three for each of four model cells.
+- [x] Run AL with the corrected unbounded inverse-gamma update and exAL with exact M0.
+- [x] Verify target/kernel identities, finite draws, and zero contract crossings.
+- [x] Produce eight score rows: VB and MCMC for all four models.
+- [x] Compare the four candidate MCMC rows with the four corrected authority rows.
+- [x] Apply the complete-packet rule: at least one mean score must improve and all four
   candidate means remain within 1% of authority, with no functional pathology.
-- [ ] Freeze manifests, transfer inventory, hashes, tests, storage status, and the final handoff.
+- [x] Freeze manifests, transfer inventory, hashes, tests, storage status, and the final handoff.
 
 Interval overlap is not predictive equivalence. Article and Overleaf files remain untouched until
 the final packet has closed and a separate integration review accepts it.
+
+## Closed outcome
+
+V7 closed 17/17 VB components, 12/12 MCMC chains, and 8/8 score workers without a
+scientific-worker failure. All four candidate forecast-score means improved and all four were
+practically noninferior, but the complete packet was not promoted. The independent AL and exAL
+models showed strong fit, forecast, interval-width, and chain-stability gains. The joint models had
+poor fit at every quantile; Joint AL also had score rank-Rhat 1.267 and Joint exAL had score tail ESS
+36.8 with one unstable score chain. The current authority therefore remains unchanged.
+
+The evidence points to the joint prior translation, not the reservoir architecture or an AL scale
+kernel defect. Mapping the median independent profile's `tau0=1e-13` to every adjacent-difference
+innovation over-shrinks the joint coefficient paths. Any continuation must calibrate joint anchor
+and innovation priors on non-protected fixtures with the V6 architecture fixed. It must not tune to
+this article-fixture realization or rerun the successful independent models merely to make a joint
+packet look uniform.

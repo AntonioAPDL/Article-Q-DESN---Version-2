@@ -12,7 +12,7 @@ local({
   manifest <- read.csv(file.path(root, constants$manifest), colClasses = "character",
     check.names = FALSE, stringsAsFactors = FALSE)
   checks <- env$app_check_joint_pht8_sources(root)
-  stopifnot(length(attr(checks, "authorized_paths")) == 8L)
+  stopifnot(length(attr(checks, "authorized_paths")) == 9L)
   rejected <- 0L
   reject <- function(expr) {
     error <- tryCatch({ force(expr); NULL }, error = identity)

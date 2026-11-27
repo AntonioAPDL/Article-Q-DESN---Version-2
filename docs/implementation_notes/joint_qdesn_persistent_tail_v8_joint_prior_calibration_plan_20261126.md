@@ -123,3 +123,21 @@ manifested `DISQUALIFIED` receipts. Any arm with one receipt is excluded wholesa
 remaining eligible must have all three matched replicates. Failures in sentinel, qualification, or
 MCMC stages remain fatal. The original 261/54 runtime remains frozen; the corrected terminal-state
 contract is replayed in a fresh runtime at a newly pinned source commit.
+
+The corrected `r5` replay completed the sentinel, 315-worker screen, and 90-worker qualification
+without failure. It selected `v8_prior_098` for AL and `v8_prior_105` for exAL against the explicit
+`v8_prior_045` V7 baseline. The first MCMC confirmation then stopped fail-closed after exact-M0
+worker 22 reported `s must be nonnegative`. Eighteen AL chains had completed, one exAL chain had a
+manifested failure, and no score stage was authorized. The executed path showed that the external
+truncated-normal generator can rarely return a floating-point value outside its declared support.
+
+The correction does not clip or project the latent variable. It rejects any nonfinite or
+out-of-support numerical result and redraws that coordinate from the same truncated-normal
+conditional, with a finite retry ceiling and a hard failure if the generator repeatedly violates
+support. Each exAL MCMC artifact records its support-redraw count. A focused injected-generator test
+proves that a negative draw is replaced by a fresh interior draw rather than by a boundary value;
+the exact-M0 dispatch and collapsed gamma-scale regressions also pass. Because this touches the
+shared exAL sampler, the source guard now authorizes exactly that one modified core file in addition
+to the eight V8 files. The failed `r5` runtime remains immutable negative evidence. Production
+resumes as a complete `r6` replay from preparation under one corrected commit; no `r5` fit or chain
+is eligible for final scoring.

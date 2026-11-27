@@ -846,6 +846,7 @@ app_joint_pht8_run_mcmc <- function(root, worker_id) {
     inference_method_id = observed_method, complete_posterior_target_sha256 =
       app_joint_pht8_target_hash(context, arm, row$likelihood_family[[1L]]),
     sigma_support = "(0,Inf)", precision_repair_count = as.integer(fit$precision_repair_count %||% 0L),
+    latent_support_redraw_count = as.integer(fit$truncnorm_support_redraw_count %||% 0L),
     warning_count = length(captured$warnings), runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     stringsAsFactors = FALSE))
   summary_path <- app_write_csv(summary, file.path(tmp, "summary.csv"))

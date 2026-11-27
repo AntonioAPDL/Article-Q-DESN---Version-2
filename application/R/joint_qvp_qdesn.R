@@ -12090,6 +12090,56 @@ app_joint_qvp_rtruncnorm <- function(n, mean, sd, lower = -Inf, upper = Inf) {
   stats::qnorm(stats::runif(n, lo, hi), mean = mean, sd = sd)
 }
 
+app_joint_qvp_rtruncnorm_support_safe <- function(
+  n,
+  mean,
+  sd,
+  lower = -Inf,
+  upper = Inf,
+  max_redraw_rounds = 100L,
+  draw_fun = app_joint_qvp_rtruncnorm
+) {
+  n <- as.integer(n)[[1L]]
+  max_redraw_rounds <- as.integer(max_redraw_rounds)[[1L]]
+  if (is.na(n) || n < 0L || is.na(max_redraw_rounds) || max_redraw_rounds < 1L) {
+    stop("Support-safe truncated-normal controls are invalid.", call. = FALSE)
+  }
+  if (n == 0L) return(numeric())
+  mean <- rep_len(as.numeric(mean), n)
+  sd <- rep_len(as.numeric(sd), n)
+  lower <- rep_len(as.numeric(lower), n)
+  upper <- rep_len(as.numeric(upper), n)
+  if (any(!is.finite(mean)) || any(!is.finite(sd)) || any(sd <= 0) ||
+      any(is.na(lower)) || any(is.na(upper)) || any(lower > upper)) {
+    stop("Support-safe truncated-normal parameters are invalid.", call. = FALSE)
+  }
+  draw <- as.numeric(draw_fun(n, mean = mean, sd = sd,
+    lower = lower, upper = upper))
+  if (length(draw) != n) {
+    stop("Truncated-normal generator returned the wrong number of draws.", call. = FALSE)
+  }
+  invalid <- !is.finite(draw) | draw < lower | draw > upper
+  redraw_count <- sum(invalid)
+  round <- 0L
+  while (any(invalid) && round < max_redraw_rounds) {
+    index <- which(invalid)
+    replacement <- as.numeric(draw_fun(length(index), mean = mean[index],
+      sd = sd[index], lower = lower[index], upper = upper[index]))
+    if (length(replacement) != length(index)) {
+      stop("Truncated-normal redraw returned the wrong number of draws.", call. = FALSE)
+    }
+    draw[index] <- replacement
+    invalid <- !is.finite(draw) | draw < lower | draw > upper
+    redraw_count <- redraw_count + sum(invalid)
+    round <- round + 1L
+  }
+  if (any(invalid)) {
+    stop("Truncated-normal generator repeatedly violated its declared support.", call. = FALSE)
+  }
+  attr(draw, "support_redraw_count") <- as.integer(redraw_count)
+  draw
+}
+
 app_joint_qvp_initialize_rhs_state <- function(
   K,
   p,
@@ -16152,6 +16202,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   precision_repair_records <- list()
   precision_repair_count <- 0L
   precision_repair_max_rel_used <- 0
+  truncnorm_support_redraw_count <- 0L
   keep_pos <- 0L
   for (iter in seq_len(n_iter)) {
     constants <- app_joint_qvp_exal_constants(tau, gamma)
@@ -16241,7 +16292,12 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	        r0 <- r - cst$A[[1L]] * v_k
 	        prec_s <- kappa * (1 + sigma_k * cst$lambda[[1L]]^2 / (cst$B[[1L]] * v_k))
 	        mean_s <- cst$lambda[[1L]] * r0 / (cst$B[[1L]] * v_k + sigma_k * cst$lambda[[1L]]^2)
-	        app_joint_qvp_rtruncnorm(Tn, mean = mean_s, sd = sqrt(1 / prec_s), lower = 0)
+	        draw <- app_joint_qvp_rtruncnorm_support_safe(
+	          Tn, mean = mean_s, sd = sqrt(1 / prec_s), lower = 0
+	        )
+	        truncnorm_support_redraw_count <<- truncnorm_support_redraw_count +
+	          as.integer(attr(draw, "support_redraw_count") %||% 0L)
+	        draw
 	      }
 	      draw_sigma_k <- function(cst, sigma_k, v_k, s_k) {
 	        chi_sigma <- 2 * b_sigma + 2 * kappa * sum(v_k) +
@@ -16450,6 +16506,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       NA_real_
     ),
     gamma_collapsed_density_evaluations = gamma_collapsed_density_evaluations,
+    truncnorm_support_redraw_count = truncnorm_support_redraw_count,
     precision_repair_enabled = isTRUE(precision_repair),
     precision_repair_start_rel = precision_repair_start_rel,
     precision_repair_max_rel = precision_repair_max_rel,

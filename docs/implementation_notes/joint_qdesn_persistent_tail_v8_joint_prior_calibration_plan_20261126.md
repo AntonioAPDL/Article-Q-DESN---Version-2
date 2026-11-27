@@ -101,3 +101,10 @@ occurred after warm-start fitting and before every prior-arm worker. The correct
 map constructor with cardinality, contiguity, origin, and horizon tests. The failed runtime remains
 frozen as negative evidence; execution resumes from a separately prepared runtime root at a newly
 pinned source commit.
+
+The first corrected-map attempt then exposed an original-index boundary: the selector design keeps
+full-series time indices while its compact fixture is reindexed to 1,800 rows. V8 now carries a
+separate original-index oracle fixture truncated exactly at the end of internal calibration. This
+supports recursive lags and DGP scoring while excluding all 1,000 protected rows. Unit checks and
+the context worker both fail closed if the forecast map exceeds this boundary or a `validation` row
+is retained. No prior arm had run when this second context-only defect was found.

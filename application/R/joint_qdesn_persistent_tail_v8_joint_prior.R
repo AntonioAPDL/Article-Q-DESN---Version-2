@@ -157,6 +157,29 @@ app_joint_pht8_fixture_plan <- function(contract) {
   panels$context_id <- seq_len(nrow(panels)); panels
 }
 
+app_joint_pht8_internal_oracle_fixture <- function(fixture, selector) {
+  end <- max(as.integer(selector$detailed_split$full_time_index))
+  if (!is.finite(end) || end <= 0L || end > length(fixture$y)) {
+    stop("V8 internal oracle boundary is invalid.", call. = FALSE)
+  }
+  vector_fields <- c("y", "mu", "sigma", "innovation", "innovation_raw")
+  for (name in vector_fields) {
+    if (!is.null(fixture[[name]])) fixture[[name]] <- fixture[[name]][seq_len(end)]
+  }
+  row_fields <- c("true_q", "detailed_split", "Z")
+  for (name in row_fields) {
+    if (!is.null(fixture[[name]])) {
+      fixture[[name]] <- fixture[[name]][seq_len(end), , drop = FALSE]
+    }
+  }
+  if (length(fixture$y) != end || nrow(fixture$true_q) != end ||
+      nrow(fixture$detailed_split) != end ||
+      any(fixture$detailed_split$role == "validation")) {
+    stop("V8 internal oracle fixture retained protected or malformed rows.", call. = FALSE)
+  }
+  fixture
+}
+
 app_joint_pht8_prepare <- function(v6_root, root = app_joint_pht8_default_root()) {
   contract <- app_joint_pht8_read_contract()
   if (dir.exists(root) && length(list.files(root, all.files = TRUE, no.. = TRUE))) {
@@ -237,7 +260,8 @@ app_joint_pht8_materialize_fixture <- function(root, row) {
   if (selector$protected_rows_persisted != 0L || any(selector$detailed_split$role == "validation")) {
     stop("V8 selector fixture contains protected rows.", call. = FALSE)
   }
-  selector
+  list(selector = selector,
+    oracle_fixture = app_joint_pht8_internal_oracle_fixture(fixture, selector))
 }
 
 app_joint_pht8_internal_forecast_map <- function(design) {
@@ -254,13 +278,18 @@ app_joint_pht8_internal_forecast_map <- function(design) {
     full_time_index = full_time, stringsAsFactors = FALSE)
 }
 
-app_joint_pht8_fit_context <- function(root, fixture) {
+app_joint_pht8_fit_context <- function(root, fixtures) {
   contract <- app_joint_pht8_read_contract(file.path(root, "frozen_contract.csv"))
   candidate <- app_read_csv(file.path(root, "frozen_candidate.csv")); base <- app_joint_sw_read_contract()
-  design <- app_joint_pure_build_design(fixture, candidate, base, selector = TRUE)
+  design <- app_joint_pure_build_design(fixtures$selector, candidate, base, selector = TRUE)
   if (length(design$train_local) != 1000L || length(design$calibration_local) != 300L ||
       design$diagnostic$protected_rows_loaded != 0L) stop("V8 selector design boundary failed.", call. = FALSE)
   design$forecast_map <- app_joint_pht8_internal_forecast_map(design)
+  fixture <- fixtures$oracle_fixture
+  if (max(design$forecast_map$full_time_index) > length(fixture$y) ||
+      any(fixture$detailed_split$role == "validation")) {
+    stop("V8 internal forecast map exceeds its non-protected oracle fixture.", call. = FALSE)
+  }
   order <- app_joint_swq_continuation_order(); al <- exal <- normals <- profiles <- list()
   for (ii in seq_len(nrow(order))) {
     tau <- order$tau[[ii]]; key <- sprintf("%.2f", tau)
@@ -341,8 +370,8 @@ app_joint_pht8_run_context <- function(root, stage, worker_id) {
   if (file.exists(file.path(out, "DONE"))) return(invisible(out))
   tmp <- paste0(out, ".tmp_", Sys.getpid()); unlink(tmp, recursive = TRUE, force = TRUE); app_ensure_dir(tmp)
   started <- Sys.time(); captured <- tryCatch(app_joint_sw_capture_warnings(function() {
-    fixture <- app_joint_pht8_materialize_fixture(root, row)
-    context <- app_joint_pht8_fit_context(root, fixture)
+    fixtures <- app_joint_pht8_materialize_fixture(root, row)
+    context <- app_joint_pht8_fit_context(root, fixtures)
     context$oracle <- app_joint_pht8_build_oracle(context,
       app_joint_pht8_read_contract(file.path(root, "frozen_contract.csv")), row$dgp_seed[[1L]] + 500000L)
     context

@@ -49,6 +49,18 @@ bad_design$calibration_local <- 1501:1799
 error <- tryCatch({ app_joint_pht8_internal_forecast_map(bad_design); NULL }, error = identity)
 stopifnot(inherits(error, "error"))
 
+# Oracle history keeps original indices through calibration and removes protected rows.
+full_fixture <- list(y = 1:400, mu = 1:400, sigma = rep(1, 400),
+  innovation = rep(0, 400), innovation_raw = rep(0, 400),
+  true_q = matrix(0, 400, length(ct$tau)), Z = matrix(0, 400, 1),
+  detailed_split = data.frame(full_time_index = 1:400,
+    role = c(rep("fit", 300), rep("validation", 100))))
+selector_fixture <- list(detailed_split = data.frame(full_time_index = 101:300))
+oracle_fixture <- app_joint_pht8_internal_oracle_fixture(full_fixture, selector_fixture)
+stopifnot(length(oracle_fixture$y) == 300L, nrow(oracle_fixture$true_q) == 300L,
+  nrow(oracle_fixture$Z) == 300L,
+  !any(oracle_fixture$detailed_split$role == "validation"))
+
 # Plan receipts fail closed and health counts only verified DONE workers.
 root <- tempfile("pht8_test_"); dir.create(root)
 plan <- data.frame(worker_id = 1:2, value = c("a", "b"))
@@ -89,4 +101,4 @@ stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
   grepl(ct$execution_branch, launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v8_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=49 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=53 production_runs=0\n")

@@ -108,3 +108,10 @@ separate original-index oracle fixture truncated exactly at the end of internal 
 supports recursive lags and DGP scoring while excluding all 1,000 protected rows. Unit checks and
 the context worker both fail closed if the forecast map exceeds this boundary or a `validation` row
 is retained. No prior arm had run when this second context-only defect was found.
+
+All three full-screen contexts then reached oracle construction. Two passed with two shards; the
+third did not meet the unchanged `0.003` split-half tolerance within the original four-shard cap.
+Because this is Monte Carlo integration precision rather than model evidence, the cap is increased
+to eight paired shards while preserving paths per shard, seeds, tolerances, DGP, and score. The
+oracle still stops at the first passing even-shard checkpoint. A failed oracle now reports its path
+count and achieved split-half and horizon-one errors. No prior-screen worker had started.

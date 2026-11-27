@@ -37,7 +37,7 @@ score,qualification_state_draws,100,integer,VB draws used for qualification mean
 score,qualification_score_draws,2000,integer,VB readout draws used for qualification intervals.
 score,score_chunk_size,100,integer,Bounded scoring chunk.
 score,oracle_paths_per_shard,4096,integer,DGP oracle trajectories per shard.
-score,oracle_max_shards,4,integer,Maximum paired oracle shards.
+score,oracle_max_shards,8,integer,Maximum paired oracle shards.
 score,oracle_split_tolerance,0.003,numeric,Split-half oracle tolerance.
 score,oracle_analytic_tolerance,0.01,numeric,Horizon-one oracle tolerance.
 mcmc,chains_per_cell,3,integer,Fresh chains per qualified joint cell.

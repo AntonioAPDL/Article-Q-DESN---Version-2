@@ -13,6 +13,7 @@ stopifnot(ct$version == "joint_qdesn_persistent_tail_v8_joint_prior_calibration"
   identical(ct$tau, c(.05, .10, .25, .50, .75, .90, .95)),
   abs(sum(ct$weights) - .9) < 1e-12, ct$screen_replicates == 3L,
   ct$qualification_replicates == 5L, ct$chains_per_cell == 3L,
+  ct$oracle_max_shards == 8L,
   ct$exal_method == "M0_v_collapsed_support_logit",
   !ct$scalar_mixing_is_hard_gate, ct$protected_selection_forbidden,
   ct$architecture_changes_forbidden, !ct$automatic_downstream_launch)
@@ -101,4 +102,4 @@ stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
   grepl(ct$execution_branch, launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v8_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=53 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=54 production_runs=0\n")

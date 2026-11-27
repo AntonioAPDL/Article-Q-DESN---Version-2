@@ -348,7 +348,14 @@ app_joint_pht8_build_oracle <- function(context, contract, seed) {
       if (oracle$diagnostics$status == "pass") break
     }
   }
-  if (is.null(oracle) || oracle$diagnostics$status != "pass") stop("V8 oracle failed.", call. = FALSE)
+  if (is.null(oracle) || oracle$diagnostics$status != "pass") {
+    detail <- if (is.null(oracle)) "no paired-shard diagnostic" else sprintf(
+      "paths=%d split_relative=%.8g analytic_relative=%.8g",
+      oracle$n_paths, oracle$diagnostics$split_half_relative_difference[[1L]],
+      oracle$diagnostics$horizon1_relative_difference[[1L]])
+    stop(sprintf("V8 oracle failed after %d shards: %s.",
+      contract$oracle_max_shards, detail), call. = FALSE)
+  }
   oracle
 }
 

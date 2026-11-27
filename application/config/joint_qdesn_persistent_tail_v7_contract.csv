@@ -1,0 +1,44 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_v7_full_confirmation,character,Complete four-model confirmation of the V6 persistent-heavy-tail candidate.
+identity,run_tag,joint_qdesn_persistent_tail_v7_full_confirmation_20261126,character,Ignored Jerez runtime tag.
+identity,execution_branch,work/joint-qdesn-persistent-tail-v7-full-confirmation-20261126,character,Only branch authorized for production.
+source,v6_head,770be4f5c6c8d80b4b600f65390652e49571c06d,character,Frozen V6 closeout commit.
+source,v6_decision_sha256,05be3d8d26ff11690ab400c07ce6c4fd88e33a30426a316bc4aa2afe90adb843,character,Frozen V6 decision.
+source,v6_finalists_sha256,9cd8760a3708be2dab0e0b0d3cea67dce88b4f666de9241da05ef32751264c5c,character,Frozen V6 seven-level finalists.
+source,v6_aggregate_sha256,6bffdcc83a9f777e3f9cef386cc4c9c0fecf30c513162a218724ff3dee0d09d5,character,Frozen V6 seven-level aggregate.
+source,authority_selected_sha256,69aced9bbd37ee506a382ed85a7fe2aba116ed296ae4285890540e572122f5f3,character,Corrected current authority selected packet.
+source,authority_decision_sha256,9a387fee500992ddf765891ce99657d3b253bc9668aa04491f9523a48af16733,character,Corrected authority final decision.
+source,article_fixture_sha256,81163bf0d6835a7a79020778c807f4851166694f2502bea35690020d8d3ea510,character,Persistent-heavy-tail article fixture.
+source,oracle_bank_sha256,d7d95c87bd6cb9f457823f43c665fdb74955a8c571f83ec1577bc2ead39c514a,character,Frozen persistent-heavy-tail recursive DGP oracle bank.
+scope,scenario_id,persistent_heavy_tail,character,Only authorized scenario.
+scope,candidate_id,persistent_heavy_tail__fitfirst_v4_2430,character,V6 confirmed candidate.
+scope,authority_role,new_geometry_parity,character,Current complete-scenario authority.
+scope,quantile_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Frozen current grid.
+scope,model_ids,independent_qdesn_rhs;joint_qdesn_rhs;independent_exqdesn_rhs;joint_exqdesn_rhs,character_vector,Complete four-model packet.
+vb,expected_components,17,integer,One Gaussian plus seven AL plus seven exAL plus two joint components.
+vb,max_iter,1600,integer,VB maximum iterations.
+vb,tolerance,0.00001,numeric,VB convergence tolerance.
+vb,joint_anchor_profile,lower,character,Map lower-tail V6 prior to first-quantile anchor.
+vb,joint_innovation_profile,median,character,Map median V6 prior to shared adjacent-difference prior.
+mcmc,chains_per_cell,3,integer,Match current authority chain count.
+mcmc,al_n_iter,2000,integer,Match corrected authority AL budget.
+mcmc,al_burn,500,integer,Match corrected authority AL burn-in.
+mcmc,al_thin,2,integer,Match corrected authority AL thinning.
+mcmc,exal_n_iter,4000,integer,Match authority exact-M0 exAL budget.
+mcmc,exal_burn,1000,integer,Match authority exact-M0 exAL burn-in.
+mcmc,exal_thin,2,integer,Match authority exact-M0 exAL thinning.
+mcmc,exal_method,M0_v_collapsed_support_logit,character,Required exact-M0 transition.
+scoring,primary_score,origin_marginal_dgp_integrated_acrps,character,Primary forecast score.
+scoring,canonical_policy,recursive_mean_state,character,Canonical posterior forecast policy.
+scoring,sensitivity_policy,recursive_path,character,Sensitivity forecast policy.
+scoring,practical_noninferiority_margin,0.01,numeric,Whole-packet safeguard against authority.
+scoring,promotion_rule,any_strict_mean_improvement_and_all_four_noninferior,character,Case-specific whole-scenario decision.
+scoring,interval_overlap_is_equivalence,false,logical,Overlap is descriptive and not equivalence.
+scoring,scalar_mixing_policy,review_unless_functionals_pathological,character,Do not reject useful models only for imperfect scalar mixing.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Authorized host.
+runtime,max_physical_workers,15,integer,Maximum distinct physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum data headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,automatic_downstream_launch,false,logical,Each stage stops for audit.

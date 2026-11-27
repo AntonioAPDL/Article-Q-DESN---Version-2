@@ -115,3 +115,11 @@ Because this is Monte Carlo integration precision rather than model evidence, th
 to eight paired shards while preserving paths per shard, seeds, tolerances, DGP, and score. The
 oracle still stops at the first passing even-shard checkpoint. A failed oracle now reports its path
 count and achieved split-half and horizon-one errors. No prior-screen worker had started.
+
+The first complete broad screen found 54 deterministic singularities: 18 extreme arms failed in all
+three matched fixtures, while 261 workers completed. These are valid negative screening results,
+not candidates for jitter or partial-replicate rescue. V8 now publishes such screen failures as
+manifested `DISQUALIFIED` receipts. Any arm with one receipt is excluded wholesale, and every arm
+remaining eligible must have all three matched replicates. Failures in sentinel, qualification, or
+MCMC stages remain fatal. The original 261/54 runtime remains frozen; the corrected terminal-state
+contract is replayed in a fresh runtime at a newly pinned source commit.

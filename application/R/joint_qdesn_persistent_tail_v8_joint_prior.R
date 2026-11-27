@@ -128,15 +128,22 @@ app_joint_pht8_verify_plan <- function(root, stage) {
 app_joint_pht8_health <- function(root, stage) {
   spec <- app_joint_pht8_stage_spec(stage); path <- file.path(root, spec[["plan"]])
   if (!file.exists(path)) return(data.frame(stage = stage, expected = 0L, completed = 0L,
-    failed = 0L, remaining = 0L, status = "not_prepared", stringsAsFactors = FALSE))
+    disqualified = 0L, failed = 0L, remaining = 0L, status = "not_prepared",
+    stringsAsFactors = FALSE))
   app_joint_pht8_verify_plan(root, stage); plan <- app_read_csv(path)
   dirs <- vapply(plan[[spec[["id"]]]], function(id) app_joint_pht8_worker_dir(root, stage, id),
     character(1L))
   done <- file.exists(file.path(dirs, "DONE")) & file.exists(file.path(dirs, "artifact_manifest.csv"))
+  disqualified <- file.exists(file.path(dirs, "DISQUALIFIED")) &
+    file.exists(file.path(dirs, "artifact_manifest.csv"))
   failed <- file.exists(file.path(dirs, "FAILED")) | file.exists(file.path(dirs, "failure.csv"))
+  failed <- failed & !disqualified
+  terminal <- done | disqualified | failed
   data.frame(stage = stage, expected = nrow(plan), completed = sum(done), failed = sum(failed),
-    remaining = sum(!done & !failed), status = if (any(failed)) "failed" else if (all(done))
-      "complete" else if (any(done)) "running" else "ready", stringsAsFactors = FALSE)
+    disqualified = sum(disqualified), remaining = sum(!terminal), status = if (any(failed))
+      "failed" else if (all(terminal) && any(disqualified)) "complete_with_disqualifications"
+      else if (all(done)) "complete" else if (any(terminal)) "running" else "ready",
+    stringsAsFactors = FALSE)
 }
 
 app_joint_pht8_hash_check <- function(path, expected, label) {
@@ -511,6 +518,20 @@ app_joint_pht8_run_vb <- function(root, stage, worker_id) {
     list(context = context, fit = fit, score = score)
   }), error = function(e) e)
   if (inherits(captured, "error")) {
+    if (stage == "screen") {
+      failure_path <- app_write_csv(cbind(row,
+        data.frame(error_message = conditionMessage(captured), stringsAsFactors = FALSE)),
+        file.path(tmp, "failure.csv"))
+      manifest <- app_joint_shared_write_manifest(tmp, c(failure = failure_path))
+      verified <- app_joint_shared_verify_manifest(tmp, manifest)
+      if (!nrow(verified) || any(!verified$verified)) {
+        stop("V8 screen disqualification manifest failed.", call. = FALSE)
+      }
+      writeLines("disqualified", file.path(tmp, "DISQUALIFIED"))
+      if (dir.exists(out)) unlink(out, recursive = TRUE, force = TRUE)
+      if (!file.rename(tmp, out)) stop("V8 screen disqualification publication failed.", call. = FALSE)
+      return(invisible(out))
+    }
     app_ensure_dir(out); app_write_csv(cbind(row, data.frame(error_message = conditionMessage(captured))),
       file.path(out, "failure.csv")); writeLines("failed", file.path(out, "FAILED")); stop(conditionMessage(captured))
   }
@@ -565,6 +586,54 @@ app_joint_pht8_aggregate_vb <- function(scores) {
     stringsAsFactors = FALSE)))
 }
 
+app_joint_pht8_screen_eligibility <- function(scores, failures, expected_replicates) {
+  bad_arms <- sort(unique(as.character(failures$arm_id)), method = "radix")
+  eligible <- scores[!scores$arm_id %in% bad_arms, , drop = FALSE]
+  counts <- table(eligible$arm_id)
+  if (!length(counts) || any(counts != as.integer(expected_replicates))) {
+    stop("V8 eligible screen arms must retain every matched replicate.", call. = FALSE)
+  }
+  disqualified <- if (length(bad_arms)) app_bind_rows_fill(lapply(bad_arms, function(id) {
+    x <- failures[failures$arm_id == id, , drop = FALSE]
+    data.frame(arm_id = id, disqualified_workers = nrow(x),
+      failed_context_ids = paste(sort(unique(x$context_id)), collapse = ";"),
+      error_messages = paste(sort(unique(x$error_message)), collapse = " | "),
+      whole_arm_excluded = TRUE, stringsAsFactors = FALSE)
+  })) else data.frame(arm_id = character(), disqualified_workers = integer(),
+    failed_context_ids = character(), error_messages = character(),
+    whole_arm_excluded = logical(), stringsAsFactors = FALSE)
+  list(eligible = eligible, disqualified = disqualified, bad_arms = bad_arms)
+}
+
+app_joint_pht8_collect_screen <- function(root, contract) {
+  health <- app_joint_pht8_health(root, "screen")
+  if (health$completed + health$disqualified != health$expected ||
+      health$failed != 0L || health$remaining != 0L) {
+    stop("V8 screen is not terminal or contains an unclassified failure.", call. = FALSE)
+  }
+  plan <- app_read_csv(file.path(root, "screen_plan.csv"))
+  successful <- failures <- list()
+  for (id in plan$worker_id) {
+    out <- app_joint_pht8_worker_dir(root, "screen", id)
+    verified <- app_joint_shared_verify_manifest(out, file.path(out, "artifact_manifest.csv"))
+    if (!nrow(verified) || any(!verified$verified)) {
+      stop("V8 screen worker manifest failed.", call. = FALSE)
+    }
+    if (file.exists(file.path(out, "DONE"))) {
+      successful[[length(successful) + 1L]] <- app_read_csv(file.path(out, "summary.csv"))
+    } else if (file.exists(file.path(out, "DISQUALIFIED"))) {
+      failures[[length(failures) + 1L]] <- app_read_csv(file.path(out, "failure.csv"))
+    } else stop("V8 screen worker terminal state is invalid.", call. = FALSE)
+  }
+  successful <- app_bind_rows_fill(successful)
+  failures <- if (length(failures)) app_bind_rows_fill(failures) else
+    plan[FALSE, , drop = FALSE]
+  if (!"error_message" %in% names(failures)) failures$error_message <- character()
+  classified <- app_joint_pht8_screen_eligibility(successful, failures,
+    contract$screen_replicates)
+  c(classified, list(successful = successful, failures = failures, health = health))
+}
+
 app_joint_pht8_write_stage_manifest <- function(root, stage, files) {
   manifest <- app_joint_shared_write_manifest(root, files,
     filename = paste0(stage, "_finalization_manifest.csv"))
@@ -595,7 +664,8 @@ app_joint_pht8_finalize_screen <- function(root) {
   sentinel <- app_read_csv(file.path(root, "sentinel_decision.csv"))
   if (sentinel$status != "V8_SENTINEL_COMPLETE_SCREEN_AUTHORIZED") stop("V8 screen is not authorized.", call. = FALSE)
   contract <- app_joint_pht8_read_contract(file.path(root, "frozen_contract.csv"))
-  scores <- app_joint_pht8_collect(root, "screen"); aggregate <- app_joint_pht8_aggregate_vb(scores)
+  collected <- app_joint_pht8_collect_screen(root, contract)
+  scores <- collected$eligible; aggregate <- app_joint_pht8_aggregate_vb(scores)
   if (any(aggregate$replicate_count != contract$screen_replicates) ||
       any(!aggregate$finite_all) || any(aggregate$contract_crossings != 0L)) {
     stop("V8 screen aggregate is incomplete or pathological.", call. = FALSE)
@@ -618,10 +688,18 @@ app_joint_pht8_finalize_screen <- function(root) {
   selection_path <- app_write_csv(selected_arms, file.path(root, "frozen_qualification_arms.csv"))
   writeLines(app_sha256_file(selection_path), paste0(selection_path, ".sha256"))
   decision <- data.frame(status = "V8_SCREEN_COMPLETE_QUALIFICATION_AUTHORIZED",
-    screen_workers = nrow(scores), fit_frontier = nrow(fit_frontier),
+    screen_workers = collected$health$expected, valid_workers = nrow(scores),
+    disqualified_workers = collected$health$disqualified,
+    disqualified_arms = length(collected$bad_arms), fit_frontier = nrow(fit_frontier),
     qualification_arms = nrow(selected_arms), qualification_workers = nrow(plan),
     automatic_launch = FALSE, stringsAsFactors = FALSE)
   files <- c(scores = app_write_csv(scores, file.path(root, "screen_scores.csv")),
+    successful = app_write_csv(collected$successful,
+      file.path(root, "screen_successful_worker_scores.csv")),
+    failures = app_write_csv(collected$failures,
+      file.path(root, "screen_failure_receipts.csv")),
+    disqualified = app_write_csv(collected$disqualified,
+      file.path(root, "screen_disqualified_arms.csv")),
     aggregate = app_write_csv(aggregate, file.path(root, "screen_aggregate.csv")),
     frontier = app_write_csv(fit_frontier, file.path(root, "screen_fit_frontier.csv")),
     selection = selection_path, decision = app_write_csv(decision, file.path(root, "screen_decision.csv")),

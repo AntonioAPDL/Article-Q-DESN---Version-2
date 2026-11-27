@@ -95,6 +95,16 @@ stopifnot(nrow(aggregate) == 2L, all(aggregate$replicate_count == 3L),
   aggregate$worst_band_fit_mae_mean[aggregate$arm_id == arms$arm_id[[2L]]] == .2,
   any(aggregate$convergence_review_any))
 
+# Singular broad-screen arms are excluded wholesale; valid arms keep all matched replicates.
+screen_failures <- data.frame(arm_id = arms$arm_id[[1L]], context_id = 1L,
+  error_message = "singular", stringsAsFactors = FALSE)
+classified <- app_joint_pht8_screen_eligibility(mock, screen_failures, 3L)
+stopifnot(nrow(classified$eligible) == 3L,
+  all(classified$eligible$arm_id == arms$arm_id[[2L]]),
+  nrow(classified$disqualified) == 1L,
+  classified$disqualified$whole_arm_excluded,
+  classified$disqualified$disqualified_workers == 1L)
+
 launcher <- paste(readLines(file.path(repo_root, "application", "scripts",
   "launch_joint_qdesn_persistent_tail_v8_stage.sh"), warn = FALSE), collapse = "\n")
 stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
@@ -102,4 +112,4 @@ stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
   grepl(ct$execution_branch, launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v8_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=54 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=59 production_runs=0\n")

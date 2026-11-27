@@ -94,3 +94,10 @@ The following pinned-R checks passed before the source freeze:
 A real-source preparation smoke also passed using the frozen V6 runtime: 105 prior arms, 20
 sentinel workers, 315 AL-screen workers, zero protected rows, and verified source/preparation
 manifests. This smoke performed no model fit and produced no article asset.
+
+The first Jerez context attempt stopped before publishing a context because its selector design did
+not yet carry the explicit 10-by-30 internal forecast map required by the DGP oracle. The failure
+occurred after warm-start fitting and before every prior-arm worker. The correction adds an exact
+map constructor with cardinality, contiguity, origin, and horizon tests. The failed runtime remains
+frozen as negative evidence; execution resumes from a separately prepared runtime root at a newly
+pinned source commit.

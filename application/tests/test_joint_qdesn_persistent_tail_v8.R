@@ -36,6 +36,19 @@ sentinel <- merge(expand.grid(context_id = fixtures$context_id[fixtures$panel ==
   likelihood_family = c("AL", "exAL")), arms[arms$sentinel, ], by = NULL)
 stopifnot(nrow(screen) == 315L, nrow(sentinel) == 20L)
 
+# Internal selection forecasts are teacher-forced across ten origins and recursive within 30 steps.
+mock_design <- list(row_meta = data.frame(full_time_index = 1:1800),
+  calibration_local = 1501:1800)
+forecast_map <- app_joint_pht8_internal_forecast_map(mock_design)
+stopifnot(nrow(forecast_map) == 300L, identical(unique(forecast_map$origin_index), 1:10),
+  all(table(forecast_map$origin_index) == 30L),
+  identical(forecast_map$horizon, rep(1:30, times = 10L)),
+  identical(forecast_map$full_time_index, 1501:1800))
+bad_design <- mock_design
+bad_design$calibration_local <- 1501:1799
+error <- tryCatch({ app_joint_pht8_internal_forecast_map(bad_design); NULL }, error = identity)
+stopifnot(inherits(error, "error"))
+
 # Plan receipts fail closed and health counts only verified DONE workers.
 root <- tempfile("pht8_test_"); dir.create(root)
 plan <- data.frame(worker_id = 1:2, value = c("a", "b"))
@@ -76,4 +89,4 @@ stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
   grepl(ct$execution_branch, launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v8_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=43 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=49 production_runs=0\n")

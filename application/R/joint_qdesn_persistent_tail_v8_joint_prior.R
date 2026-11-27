@@ -240,12 +240,27 @@ app_joint_pht8_materialize_fixture <- function(root, row) {
   selector
 }
 
+app_joint_pht8_internal_forecast_map <- function(design) {
+  full_time <- as.integer(design$row_meta$full_time_index[design$calibration_local])
+  origin_count <- 10L
+  horizon_count <- 30L
+  if (length(full_time) != origin_count * horizon_count ||
+      any(!is.finite(full_time)) || any(diff(full_time) != 1L)) {
+    stop("V8 internal forecast geometry must be 10 contiguous 30-step origins.",
+      call. = FALSE)
+  }
+  data.frame(origin_index = rep(seq_len(origin_count), each = horizon_count),
+    horizon = rep(seq_len(horizon_count), times = origin_count),
+    full_time_index = full_time, stringsAsFactors = FALSE)
+}
+
 app_joint_pht8_fit_context <- function(root, fixture) {
   contract <- app_joint_pht8_read_contract(file.path(root, "frozen_contract.csv"))
   candidate <- app_read_csv(file.path(root, "frozen_candidate.csv")); base <- app_joint_sw_read_contract()
   design <- app_joint_pure_build_design(fixture, candidate, base, selector = TRUE)
   if (length(design$train_local) != 1000L || length(design$calibration_local) != 300L ||
       design$diagnostic$protected_rows_loaded != 0L) stop("V8 selector design boundary failed.", call. = FALSE)
+  design$forecast_map <- app_joint_pht8_internal_forecast_map(design)
   order <- app_joint_swq_continuation_order(); al <- exal <- normals <- profiles <- list()
   for (ii in seq_len(nrow(order))) {
     tau <- order$tau[[ii]]; key <- sprintf("%.2f", tau)

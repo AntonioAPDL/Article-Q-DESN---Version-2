@@ -118,10 +118,14 @@ app_joint_pht7_prepare <- function(v6_root, authority_root, fixture_path, oracle
   }
   fixture <- readRDS(destinations[["article_fixture"]])
   base <- app_joint_sw_read_contract()
-  design <- app_joint_pure_build_design(fixture, candidate, base, selector = TRUE)
-  if (design$diagnostic$protected_rows_loaded != 0L ||
-      !identical(as.numeric(design$tau), contract$tau)) {
-    stop("V7 design violates the training-only fit boundary or quantile grid.", call. = FALSE)
+  design <- app_joint_pure_full_design(fixture, candidate, base)
+  validation_local <- which(design$row_meta$role == "validation")
+  fit_boundary_ok <- length(validation_local) > 0L &&
+    !length(intersect(design$train_local, validation_local)) &&
+    all(design$row_meta$role[design$train_local] == "fit") &&
+    all(design$score_local %in% validation_local)
+  if (!fit_boundary_ok || !identical(as.numeric(design$tau), contract$tau)) {
+    stop("V7 design violates the frozen fit/evaluation boundary or quantile grid.", call. = FALSE)
   }
   design_path <- file.path(root, "full_confirmation", "design.rds")
   fixture_copy <- file.path(root, "full_confirmation", "article_fixture.rds")

@@ -102,6 +102,17 @@ stopifnot(
   app_joint_pht7_model_metadata("joint_exqdesn_rhs")$likelihood_family == "exAL",
   app_joint_pht7_model_metadata("independent_qdesn_rhs")$fit_structure == "independent")
 
+cell_candidate <- data.frame(scenario_id = contract$scenario_id,
+  candidate_id = contract$candidate_id, architecture_signature = "unit_architecture",
+  feature_contract = "pure_recursive_v1", input_scale = 0.075,
+  response_lags = 12L, stringsAsFactors = FALSE)
+cells <- app_joint_pht7_model_cells(cell_candidate, contract,
+  "/tmp/vb_packet.rds", "/tmp/design.rds", "/tmp/fixture.rds")
+stopifnot(nrow(cells) == 4L, !anyDuplicated(cells$model_cell_id),
+  all(cells$input_scale == 0.075), all(cells$response_lags == 12L),
+  all(cells$feature_contract == "pure_recursive_v1"),
+  setequal(cells$model_id, contract$model_ids))
+
 launcher <- paste(readLines(file.path(repo_root, "application", "scripts",
   "launch_joint_qdesn_persistent_tail_v7_stage.sh"), warn = FALSE), collapse = "\n")
 stopifnot(

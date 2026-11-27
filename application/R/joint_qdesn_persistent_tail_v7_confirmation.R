@@ -368,6 +368,28 @@ app_joint_pht7_model_metadata <- function(model_id) {
     stringsAsFactors = FALSE)
 }
 
+app_joint_pht7_model_cells <- function(candidate, contract, vb_packet_path,
+    design_path, fixture_path) {
+  app_check_required_columns(candidate, c("scenario_id", "candidate_id",
+    "architecture_signature", "feature_contract", "input_scale", "response_lags"),
+    "V7 frozen candidate")
+  if (nrow(candidate) != 1L) stop("V7 requires exactly one frozen candidate.", call. = FALSE)
+  app_bind_rows_fill(lapply(seq_along(contract$model_ids), function(i) {
+    meta <- app_joint_pht7_model_metadata(contract$model_ids[[i]])
+    row <- candidate
+    row$cell_index <- i
+    row$specification_role <- "v6_candidate"
+    row$model_id <- meta$model_id
+    row$fit_structure <- meta$fit_structure
+    row$likelihood_family <- meta$likelihood_family
+    row$model_cell_id <- paste(contract$scenario_id, "v6_candidate", meta$model_id, sep = "__")
+    row$vb_packet_path <- vb_packet_path
+    row$design_path <- design_path
+    row$fixture_path <- fixture_path
+    row
+  }))
+}
+
 app_joint_pht7_finalize_vb <- function(root) {
   root <- normalizePath(root, mustWork = TRUE); contract <- app_joint_pht7_read_contract(
     file.path(root, "frozen_contract.csv"))
@@ -380,19 +402,11 @@ app_joint_pht7_finalize_vb <- function(root) {
   if (nrow(summary) != contract$expected_components || any(!summary$finite_output) ||
       any(summary$protected_rows_used_for_fit != 0L) ||
       any(app_as_bool_vec(summary$protected_scores_computed))) stop("V7 VB gate failed.", call. = FALSE)
-  model_rows <- lapply(seq_along(contract$model_ids), function(i) {
-    meta <- app_joint_pht7_model_metadata(contract$model_ids[[i]])
-    data.frame(cell_index = i, scenario_id = contract$scenario_id,
-      specification_role = "v6_candidate", candidate_id = contract$candidate_id,
-      model_id = meta$model_id, fit_structure = meta$fit_structure,
-      likelihood_family = meta$likelihood_family,
-      model_cell_id = paste(contract$scenario_id, "v6_candidate", meta$model_id, sep = "__"),
-      vb_packet_path = file.path(worker, "vb_packet.rds"),
-      design_path = file.path(root, "full_confirmation", "design.rds"),
-      fixture_path = file.path(root, "full_confirmation", "article_fixture.rds"),
-      stringsAsFactors = FALSE)
-  })
-  cells <- app_bind_rows_fill(model_rows)
+  candidate <- app_read_csv(file.path(root, "frozen_candidate.csv"))
+  cells <- app_joint_pht7_model_cells(candidate, contract,
+    file.path(worker, "vb_packet.rds"),
+    file.path(root, "full_confirmation", "design.rds"),
+    file.path(root, "full_confirmation", "article_fixture.rds"))
   workers <- app_bind_rows_fill(lapply(seq_len(nrow(cells)), function(i) {
     app_bind_rows_fill(lapply(seq_len(contract$chains_per_cell), function(chain_id) {
       row <- cells[i, , drop = FALSE]; exal <- row$likelihood_family == "exAL"

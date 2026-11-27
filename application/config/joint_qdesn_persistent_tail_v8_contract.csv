@@ -1,0 +1,58 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_tail_v8_joint_prior_calibration,character,Fixed-architecture joint anchor and innovation prior calibration.
+identity,run_tag,joint_qdesn_persistent_tail_v8_joint_prior_calibration_20261126,character,Ignored Jerez runtime tag.
+identity,execution_branch,work/joint-qdesn-persistent-tail-v8-joint-prior-calibration-20261126,character,Dedicated execution branch.
+source,v7_parent_head,6aa48ea681df6fe2e32636fb70ed9ff5176085f3,character,Frozen V7 closeout parent.
+source,v6_decision_sha256,05be3d8d26ff11690ab400c07ce6c4fd88e33a30426a316bc4aa2afe90adb843,character,V6 final decision.
+source,v6_finalists_sha256,9cd8760a3708be2dab0e0b0d3cea67dce88b4f666de9241da05ef32751264c5c,character,V6 seven-level finalists.
+source,v6_aggregate_sha256,6bffdcc83a9f777e3f9cef386cc4c9c0fecf30c513162a218724ff3dee0d09d5,character,V6 seven-level aggregate.
+scope,scenario_id,persistent_heavy_tail,character,Only authorized scenario.
+scope,candidate_id,persistent_heavy_tail__fitfirst_v4_2430,character,Frozen V6 architecture.
+scope,quantile_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Current seven-level grid.
+scope,trapezoidal_weights,0.025;0.10;0.20;0.25;0.20;0.10;0.025,numeric_vector,Unnormalized finite-grid score weights.
+scope,protected_selection_forbidden,true,logical,Protected article outcomes cannot enter calibration.
+scope,architecture_changes_forbidden,true,logical,V6 DESN architecture remains fixed.
+prior,anchor_tau0_values,1e-11;1e-9;1e-7;1e-5;1e-3,numeric_vector,Broad anchor global-scale grid.
+prior,innovation_tau0_values,1e-13;1e-11;1e-9;1e-7;1e-5;1e-3;1e-1,numeric_vector,Broad adjacent-difference global-scale grid.
+prior,slab_profiles,v7;innovation_wide;both_wide,character_vector,Fixed anchor and innovation slab pairs.
+prior,baseline_anchor_tau0,1e-7,numeric,V7 anchor scale.
+prior,baseline_innovation_tau0,1e-13,numeric,V7 innovation scale.
+prior,baseline_anchor_zeta2,0.01,numeric,V7 anchor slab variance.
+prior,baseline_innovation_zeta2,0.01,numeric,V7 innovation slab variance.
+screen,sentinel_arm_count,10,integer,Mechanism-covering startup arms.
+screen,screen_replicates,3,integer,Fresh matched selector fixtures.
+screen,fit_frontier_count,16,integer,Arms retained by worst-band fit before forecast ranking.
+screen,qualification_arm_count,8,integer,Maximum nonbaseline arms entering fresh qualification.
+screen,qualification_replicates,5,integer,Fresh matched qualification fixtures.
+screen,mcmc_replicates,3,integer,Qualification fixtures used for MCMC functional checks.
+screen,screen_seed_offset,91000,integer,Fresh selector seed panel.
+screen,qualification_seed_offset,92000,integer,Fresh qualification seed panel.
+vb,screen_max_iter,500,integer,Broad-screen VB iteration cap.
+vb,screen_tolerance,0.001,numeric,Broad-screen convergence tolerance.
+vb,qualification_max_iter,1600,integer,Qualification VB iteration cap.
+vb,qualification_tolerance,0.00001,numeric,Qualification VB tolerance.
+score,screen_state_draws,24,integer,VB draws used for screen mean-state integration.
+score,screen_score_draws,400,integer,VB readout draws used for screen score intervals.
+score,qualification_state_draws,100,integer,VB draws used for qualification mean-state integration.
+score,qualification_score_draws,2000,integer,VB readout draws used for qualification intervals.
+score,score_chunk_size,100,integer,Bounded scoring chunk.
+score,oracle_paths_per_shard,4096,integer,DGP oracle trajectories per shard.
+score,oracle_max_shards,4,integer,Maximum paired oracle shards.
+score,oracle_split_tolerance,0.003,numeric,Split-half oracle tolerance.
+score,oracle_analytic_tolerance,0.01,numeric,Horizon-one oracle tolerance.
+mcmc,chains_per_cell,3,integer,Fresh chains per qualified joint cell.
+mcmc,al_n_iter,2000,integer,Corrected AL qualification iterations.
+mcmc,al_burn,500,integer,Corrected AL qualification burn-in.
+mcmc,exal_n_iter,4000,integer,Exact-M0 exAL qualification iterations.
+mcmc,exal_burn,1000,integer,Exact-M0 exAL qualification burn-in.
+mcmc,thin,2,integer,Qualification thinning interval.
+mcmc,exal_method,M0_v_collapsed_support_logit,character,Required exact M0 kernel.
+decision,interval_overlap_is_equivalence,false,logical,Credible interval overlap is descriptive only.
+decision,scalar_mixing_is_hard_gate,false,logical,Scalar mixing is review-level.
+decision,functional_rhat_review,1.25,numeric,Functional pathology review threshold.
+decision,chain_relative_range_review,0.20,numeric,Between-chain score range threshold.
+runtime,required_hostname,jerez.be.ucsc.edu,character,Authorized execution host.
+runtime,max_physical_workers,15,integer,Maximum distinct physical cores.
+runtime,min_data_free_gib,80,numeric,Minimum Jerez storage headroom.
+runtime,min_available_memory_gib,128,numeric,Minimum available memory.
+runtime,automatic_downstream_launch,false,logical,Every scientific stage stops for finalization.

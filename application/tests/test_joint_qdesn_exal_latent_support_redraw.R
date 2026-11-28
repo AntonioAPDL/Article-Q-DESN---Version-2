@@ -6,25 +6,35 @@ repo_root <- if (dir.exists(file.path(getwd(), "application", "R"))) normalizePa
 }
 source(file.path(repo_root, "application", "scripts", "_joint_qdesn_persistent_tail_v8_bootstrap.R"))
 
-# Numerical support violations are redrawn from the same truncated law, never clipped.
+# Numerical support violations use an exact tail-stable draw, never clipping.
 calls <- 0L
-one_bad_then_valid <- function(n, mean, sd, lower, upper) {
+one_bad <- function(n, mean, sd, lower, upper) {
   calls <<- calls + 1L
-  if (calls == 1L) return(c(-0.25, 0.4, 0.6))
+  c(-0.25, 0.4, 0.6)
+}
+fallback_calls <- 0L
+known_fallback <- function(n, mean, sd, lower, upper) {
+  fallback_calls <<- fallback_calls + 1L
   stopifnot(n == 1L, identical(mean, 0), identical(lower, 0))
-  0.37
+  out <- 0.37
+  attr(out, "tail_proposal_count") <- 2L
+  out
 }
 draw <- app_joint_qvp_rtruncnorm_support_safe(3L, mean = 0, sd = 1,
-  lower = 0, draw_fun = one_bad_then_valid)
+  lower = 0, draw_fun = one_bad, tail_fallback_fun = known_fallback)
 stopifnot(identical(as.numeric(draw), c(0.37, 0.4, 0.6)),
-  attr(draw, "support_redraw_count") == 1L, calls == 2L,
+  attr(draw, "support_redraw_count") == 1L,
+  attr(draw, "tail_fallback_count") == 1L,
+  attr(draw, "tail_proposal_count") == 2L,
+  calls == 1L, fallback_calls == 1L,
   draw[[1L]] != 0)
 
 # Persistent generator defects fail closed instead of creating a boundary atom.
 always_bad <- function(n, mean, sd, lower, upper) rep(-1, n)
 error <- tryCatch({
   app_joint_qvp_rtruncnorm_support_safe(2L, mean = 0, sd = 1,
-    lower = 0, max_redraw_rounds = 2L, draw_fun = always_bad)
+    lower = 0, max_redraw_rounds = 2L, draw_fun = always_bad,
+    tail_fallback_fun = always_bad)
   NULL
 }, error = identity)
 stopifnot(inherits(error, "error"),
@@ -37,4 +47,35 @@ production <- app_joint_qvp_rtruncnorm_support_safe(1000L,
 stopifnot(length(production) == 1000L, all(is.finite(production)),
   all(production >= 0), attr(production, "support_redraw_count") >= 0L)
 
-cat("JOINT_EXAL_LATENT_SUPPORT_REDRAW_TEST_PASS expectations=12 production_runs=0\n")
+# Extreme standardized tails remain interior and finite without cancellation.
+thresholds <- c(-8, 0, 2, 8, 20, 100, 1e4, 1e8)
+set.seed(20261128)
+extreme <- app_joint_qvp_rtruncnorm_tail_stable(length(thresholds),
+  mean = -thresholds, sd = 1, lower = 0)
+stopifnot(all(is.finite(extreme)), all(extreme > 0),
+  attr(extreme, "max_standardized_tail_threshold") == max(thresholds),
+  attr(extreme, "tail_proposal_count") >= length(thresholds))
+
+# Reflection uses the same exact one-sided kernel for an upper truncation.
+set.seed(20261129)
+lower_draw <- app_joint_qvp_rtruncnorm_tail_stable(100L,
+  mean = -8, sd = 1, lower = 0)
+set.seed(20261129)
+upper_draw <- app_joint_qvp_rtruncnorm_tail_stable(100L,
+  mean = 8, sd = 1, upper = 0)
+stopifnot(identical(as.numeric(lower_draw), -as.numeric(upper_draw)))
+
+# Monte Carlo moments agree with the analytic one-sided normal moments.
+set.seed(20261130)
+a <- 8
+sample <- app_joint_qvp_rtruncnorm_tail_stable(50000L,
+  mean = -a, sd = 1, lower = 0)
+mills <- exp(stats::dnorm(a, log = TRUE) - stats::pnorm(a,
+  lower.tail = FALSE, log.p = TRUE))
+expected_mean <- mills - a
+expected_var <- 1 + a * mills - mills^2
+stopifnot(abs(mean(sample) - expected_mean) < 0.003,
+  abs(stats::var(sample) - expected_var) < 0.001,
+  !any(sample == 0))
+
+cat("JOINT_EXAL_LATENT_SUPPORT_REDRAW_TEST_PASS expectations=26 production_runs=0\n")

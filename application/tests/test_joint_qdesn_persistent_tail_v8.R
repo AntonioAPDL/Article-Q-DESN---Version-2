@@ -81,6 +81,28 @@ altered <- baseline; altered$innovation_tau0 <- 1e-7
 stopifnot(grepl("^[0-9a-f]{64}$", hash),
   hash != app_joint_pht8_target_hash(mock_context, altered, "AL"),
   hash != app_joint_pht8_target_hash(mock_context, baseline, "exAL"))
+al_sampler_hash <- app_joint_pht8_sampler_hash("AL", ct)
+exal_sampler_hash <- app_joint_pht8_sampler_hash("exAL", ct)
+stopifnot(grepl("^[0-9a-f]{64}$", al_sampler_hash),
+  grepl("^[0-9a-f]{64}$", exal_sampler_hash),
+  al_sampler_hash != exal_sampler_hash,
+  grepl("tail-stable-m0", ct$execution_branch, fixed = TRUE))
+
+# Chain combination requires both posterior-target and effective-kernel identity.
+metadata <- data.frame(likelihood_family = rep("exAL", 3L),
+  arm_id = rep("candidate", 3L), chain_id = 1:3,
+  complete_posterior_target_sha256 = rep(strrep("a", 64L), 3L),
+  effective_sampler_control_sha256 = rep(exal_sampler_hash, 3L),
+  stringsAsFactors = FALSE)
+stopifnot(isTRUE(app_joint_pht8_validate_chain_metadata(metadata,
+  "exAL", "candidate", 3L)))
+incompatible <- metadata
+incompatible$effective_sampler_control_sha256[[3L]] <- al_sampler_hash
+error <- tryCatch({
+  app_joint_pht8_validate_chain_metadata(incompatible, "exAL", "candidate", 3L)
+  NULL
+}, error = identity)
+stopifnot(inherits(error, "error"), grepl("incompatible", conditionMessage(error)))
 
 # Aggregation keeps fit, forecast, interval, crossing, and convergence dimensions separate.
 mock <- data.frame(arm_id = rep(arms$arm_id[1:2], each = 3L), likelihood_family = "AL",
@@ -112,4 +134,4 @@ stopifnot(grepl("jerez.be.ucsc.edu", launcher, fixed = TRUE),
   grepl(ct$execution_branch, launcher, fixed = TRUE),
   !grepl("finalize_joint_qdesn_persistent_tail_v8_stage", launcher, fixed = TRUE))
 
-cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=59 production_runs=0\n")
+cat("JOINT_PERSISTENT_TAIL_V8_TEST_PASS expectations=66 production_runs=0\n")

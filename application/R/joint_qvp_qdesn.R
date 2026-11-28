@@ -12090,6 +12090,88 @@ app_joint_qvp_rtruncnorm <- function(n, mean, sd, lower = -Inf, upper = Inf) {
   stats::qnorm(stats::runif(n, lo, hi), mean = mean, sd = sd)
 }
 
+app_joint_qvp_rtruncnorm_tail_stable <- function(
+  n,
+  mean,
+  sd,
+  lower = -Inf,
+  upper = Inf,
+  max_proposals = 10000L
+) {
+  n <- as.integer(n)[[1L]]
+  max_proposals <- as.integer(max_proposals)[[1L]]
+  if (is.na(n) || n < 0L || is.na(max_proposals) || max_proposals < 1L) {
+    stop("Tail-stable truncated-normal controls are invalid.", call. = FALSE)
+  }
+  if (n == 0L) return(numeric())
+  mean <- rep_len(as.numeric(mean), n)
+  sd <- rep_len(as.numeric(sd), n)
+  lower <- rep_len(as.numeric(lower), n)
+  upper <- rep_len(as.numeric(upper), n)
+  if (any(!is.finite(mean)) || any(!is.finite(sd)) || any(sd <= 0) ||
+      any(is.na(lower)) || any(is.na(upper)) || any(lower > upper)) {
+    stop("Tail-stable truncated-normal parameters are invalid.", call. = FALSE)
+  }
+  lower_tail <- is.finite(lower) & is.infinite(upper) & upper > 0
+  upper_tail <- is.infinite(lower) & lower < 0 & is.finite(upper)
+  if (any(!(lower_tail | upper_tail))) {
+    stop("Tail-stable truncated-normal sampling requires exactly one finite bound.", call. = FALSE)
+  }
+
+  # Reflect upper-tail draws so the numerical core only handles [lower, Inf).
+  reflected_mean <- ifelse(lower_tail, mean, -mean)
+  reflected_lower <- ifelse(lower_tail, lower, -upper)
+  threshold <- (reflected_lower - reflected_mean) / sd
+  if (any(!is.finite(threshold))) {
+    stop("Standardized truncated-normal tail thresholds are nonfinite.", call. = FALSE)
+  }
+
+  draw_lower_tail <- function(a, boundary, scale) {
+    proposals <- 0L
+    if (a <= 0) {
+      repeat {
+        proposals <- proposals + 1L
+        if (proposals > max_proposals) {
+          stop("Tail-stable Gaussian rejection exceeded its proposal limit.", call. = FALSE)
+        }
+        z <- stats::rnorm(1L)
+        if (z >= a) {
+          return(list(value = boundary + scale * (z - a), proposals = proposals))
+        }
+      }
+    }
+
+    # Robert's exponential rejection sampler. Sampling the excess over the
+    # boundary avoids cancellation in mean + sd * z for extreme right tails.
+    lambda <- if (a > 1.0e150) a + 1 / a else (a + sqrt(a * a + 4)) / 2
+    delta <- 1 / lambda
+    repeat {
+      proposals <- proposals + 1L
+      if (proposals > max_proposals) {
+        stop("Tail-stable exponential rejection exceeded its proposal limit.", call. = FALSE)
+      }
+      excess <- stats::rexp(1L, rate = lambda)
+      if (log(stats::runif(1L)) <= -0.5 * (excess - delta)^2) {
+        return(list(value = boundary + scale * excess, proposals = proposals))
+      }
+    }
+  }
+
+  out <- numeric(n)
+  proposal_count <- 0L
+  for (i in seq_len(n)) {
+    one <- draw_lower_tail(threshold[[i]], reflected_lower[[i]], sd[[i]])
+    out[[i]] <- if (lower_tail[[i]]) one$value else -one$value
+    proposal_count <- proposal_count + one$proposals
+  }
+  if (any(!is.finite(out)) || any(out < lower) || any(out > upper)) {
+    stop("Tail-stable truncated-normal output violated its declared support.", call. = FALSE)
+  }
+  attr(out, "tail_proposal_count") <- as.integer(proposal_count)
+  attr(out, "max_standardized_tail_threshold") <- max(threshold)
+  out
+}
+
 app_joint_qvp_rtruncnorm_support_safe <- function(
   n,
   mean,
@@ -12097,7 +12179,8 @@ app_joint_qvp_rtruncnorm_support_safe <- function(
   lower = -Inf,
   upper = Inf,
   max_redraw_rounds = 100L,
-  draw_fun = app_joint_qvp_rtruncnorm
+  draw_fun = app_joint_qvp_rtruncnorm,
+  tail_fallback_fun = app_joint_qvp_rtruncnorm_tail_stable
 ) {
   n <- as.integer(n)[[1L]]
   max_redraw_rounds <- as.integer(max_redraw_rounds)[[1L]]
@@ -12120,6 +12203,28 @@ app_joint_qvp_rtruncnorm_support_safe <- function(
   }
   invalid <- !is.finite(draw) | draw < lower | draw > upper
   redraw_count <- sum(invalid)
+  tail_fallback_count <- 0L
+  tail_proposal_count <- 0L
+  lower_tail <- is.finite(lower) & is.infinite(upper) & upper > 0
+  upper_tail <- is.infinite(lower) & lower < 0 & is.finite(upper)
+  one_sided <- lower_tail | upper_tail
+  standardized_tail <- rep(NA_real_, n)
+  standardized_tail[lower_tail] <- (lower[lower_tail] - mean[lower_tail]) / sd[lower_tail]
+  standardized_tail[upper_tail] <- (mean[upper_tail] - upper[upper_tail]) / sd[upper_tail]
+  if (any(invalid & one_sided) && is.function(tail_fallback_fun)) {
+    index <- which(invalid & one_sided)
+    replacement <- tail_fallback_fun(length(index), mean = mean[index],
+      sd = sd[index], lower = lower[index], upper = upper[index])
+    proposal_attr <- attr(replacement, "tail_proposal_count")
+    replacement <- as.numeric(replacement)
+    if (length(replacement) != length(index)) {
+      stop("Tail-stable truncated-normal fallback returned the wrong number of draws.", call. = FALSE)
+    }
+    draw[index] <- replacement
+    tail_fallback_count <- length(index)
+    tail_proposal_count <- as.integer(proposal_attr %||% length(index))
+    invalid <- !is.finite(draw) | draw < lower | draw > upper
+  }
   round <- 0L
   while (any(invalid) && round < max_redraw_rounds) {
     index <- which(invalid)
@@ -12134,9 +12239,19 @@ app_joint_qvp_rtruncnorm_support_safe <- function(
     round <- round + 1L
   }
   if (any(invalid)) {
-    stop("Truncated-normal generator repeatedly violated its declared support.", call. = FALSE)
+    threshold <- standardized_tail[invalid & is.finite(standardized_tail)]
+    threshold_text <- if (length(threshold)) {
+      sprintf("; max standardized tail threshold %.17g", max(threshold))
+    } else ""
+    stop(sprintf("Truncated-normal generator repeatedly violated its declared support%s.",
+      threshold_text), call. = FALSE)
   }
   attr(draw, "support_redraw_count") <- as.integer(redraw_count)
+  attr(draw, "tail_fallback_count") <- as.integer(tail_fallback_count)
+  attr(draw, "tail_proposal_count") <- as.integer(tail_proposal_count)
+  attr(draw, "max_standardized_tail_threshold") <- if (any(is.finite(standardized_tail))) {
+    max(standardized_tail[is.finite(standardized_tail)])
+  } else NA_real_
   draw
 }
 
@@ -16203,6 +16318,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   precision_repair_count <- 0L
   precision_repair_max_rel_used <- 0
   truncnorm_support_redraw_count <- 0L
+  truncnorm_tail_fallback_count <- 0L
+  truncnorm_tail_proposal_count <- 0L
+  truncnorm_max_standardized_tail_threshold <- -Inf
   keep_pos <- 0L
   for (iter in seq_len(n_iter)) {
     constants <- app_joint_qvp_exal_constants(tau, gamma)
@@ -16297,6 +16415,15 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	        )
 	        truncnorm_support_redraw_count <<- truncnorm_support_redraw_count +
 	          as.integer(attr(draw, "support_redraw_count") %||% 0L)
+	        truncnorm_tail_fallback_count <<- truncnorm_tail_fallback_count +
+	          as.integer(attr(draw, "tail_fallback_count") %||% 0L)
+	        truncnorm_tail_proposal_count <<- truncnorm_tail_proposal_count +
+	          as.integer(attr(draw, "tail_proposal_count") %||% 0L)
+	        threshold <- as.numeric(attr(draw, "max_standardized_tail_threshold") %||% NA_real_)
+	        if (is.finite(threshold)) {
+	          truncnorm_max_standardized_tail_threshold <<-
+	            max(truncnorm_max_standardized_tail_threshold, threshold)
+	        }
 	        draw
 	      }
 	      draw_sigma_k <- function(cst, sigma_k, v_k, s_k) {
@@ -16507,6 +16634,12 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     ),
     gamma_collapsed_density_evaluations = gamma_collapsed_density_evaluations,
     truncnorm_support_redraw_count = truncnorm_support_redraw_count,
+    truncnorm_tail_fallback_count = truncnorm_tail_fallback_count,
+    truncnorm_tail_proposal_count = truncnorm_tail_proposal_count,
+    truncnorm_max_standardized_tail_threshold =
+      if (is.finite(truncnorm_max_standardized_tail_threshold)) {
+        truncnorm_max_standardized_tail_threshold
+      } else NA_real_,
     precision_repair_enabled = isTRUE(precision_repair),
     precision_repair_start_rel = precision_repair_start_rel,
     precision_repair_max_rel = precision_repair_max_rel,

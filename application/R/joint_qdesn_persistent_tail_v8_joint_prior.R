@@ -789,6 +789,42 @@ app_joint_pht8_target_hash <- function(context, arm, family) {
   digest::digest(fields, algo = "sha256")
 }
 
+app_joint_pht8_sampler_hash <- function(family, contract) {
+  fields <- if (family == "exAL") {
+    list(version = "joint_qdesn_persistent_tail_v8_sampler_v2",
+      likelihood_family = family, inference_method_id = contract$exal_method,
+      latent_s_update = "normal_positive_support",
+      truncated_normal_backend = "verified_truncnorm_with_exact_robert_tail_fallback_v1",
+      boundary_mapping = "lower_plus_sd_times_excess_no_clipping",
+      sigma_support = "(0,Inf)")
+  } else {
+    list(version = "joint_qdesn_persistent_tail_v8_sampler_v2",
+      likelihood_family = family, inference_method_id = "AL_latent_GIG_Gibbs",
+      scale_update = "positive_unbounded_exact_conditional", sigma_support = "(0,Inf)")
+  }
+  digest::digest(fields, algo = "sha256")
+}
+
+app_joint_pht8_validate_chain_metadata <- function(
+  metadata,
+  expected_family,
+  expected_arm,
+  expected_chains
+) {
+  required <- c("likelihood_family", "arm_id", "chain_id",
+    "complete_posterior_target_sha256", "effective_sampler_control_sha256")
+  if (!all(required %in% names(metadata)) || nrow(metadata) != expected_chains ||
+      anyNA(metadata[, required, drop = FALSE]) ||
+      any(metadata$likelihood_family != expected_family) ||
+      any(metadata$arm_id != expected_arm) ||
+      anyDuplicated(metadata$chain_id) ||
+      length(unique(metadata$complete_posterior_target_sha256)) != 1L ||
+      length(unique(metadata$effective_sampler_control_sha256)) != 1L) {
+    stop("V8 incompatible MCMC chains cannot be combined.", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 app_joint_pht8_fit_mcmc <- function(context, arm, family, init, row, contract) {
   base <- app_joint_swq_controls(app_joint_sw_read_contract())
   alpha_mean <- vapply(seq_along(contract$tau), function(k)
@@ -845,8 +881,14 @@ app_joint_pht8_run_mcmc <- function(root, worker_id) {
   summary <- cbind(row, data.frame(retained_draws = nrow(draws), finite_draws = TRUE,
     inference_method_id = observed_method, complete_posterior_target_sha256 =
       app_joint_pht8_target_hash(context, arm, row$likelihood_family[[1L]]),
+    effective_sampler_control_sha256 = app_joint_pht8_sampler_hash(
+      row$likelihood_family[[1L]], contract),
     sigma_support = "(0,Inf)", precision_repair_count = as.integer(fit$precision_repair_count %||% 0L),
     latent_support_redraw_count = as.integer(fit$truncnorm_support_redraw_count %||% 0L),
+    latent_tail_fallback_count = as.integer(fit$truncnorm_tail_fallback_count %||% 0L),
+    latent_tail_proposal_count = as.integer(fit$truncnorm_tail_proposal_count %||% 0L),
+    latent_max_standardized_tail_threshold =
+      as.numeric(fit$truncnorm_max_standardized_tail_threshold %||% NA_real_),
     warning_count = length(captured$warnings), runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     stringsAsFactors = FALSE))
   summary_path <- app_write_csv(summary, file.path(tmp, "summary.csv"))
@@ -871,6 +913,15 @@ app_joint_pht8_finalize_mcmc <- function(root) {
       app_joint_pht8_read_contract(file.path(root, "frozen_contract.csv"))$chains_per_cell)) {
     stop("V8 MCMC score groups lack complete chains.", call. = FALSE)
   }
+  chains_per_cell <- app_joint_pht8_read_contract(
+    file.path(root, "frozen_contract.csv"))$chains_per_cell
+  for (i in seq_len(nrow(keys))) {
+    metadata <- summary[summary$context_id == keys$context_id[[i]] &
+      summary$likelihood_family == keys$likelihood_family[[i]] &
+      summary$arm_id == keys$arm_id[[i]], , drop = FALSE]
+    app_joint_pht8_validate_chain_metadata(metadata,
+      keys$likelihood_family[[i]], keys$arm_id[[i]], chains_per_cell)
+  }
   app_joint_pht8_freeze_plan(root, "mcmc_score", keys)
   decision <- data.frame(status = "V8_MCMC_COMPLETE_SCORE_AUTHORIZED", mcmc_workers = nrow(summary),
     score_workers = nrow(keys), failures = 0L, automatic_launch = FALSE, stringsAsFactors = FALSE)
@@ -892,10 +943,11 @@ app_joint_pht8_run_mcmc_score <- function(root, worker_id) {
   dirs <- vapply(ids, function(id) app_joint_pht8_worker_dir(root, "mcmc", id), character(1L))
   frames <- lapply(dirs, function(path) app_read_csv(file.path(path, "posterior_draws.csv.gz")))
   metadata <- app_bind_rows_fill(lapply(dirs, function(path) app_read_csv(file.path(path, "summary.csv"))))
-  if (length(unique(metadata$complete_posterior_target_sha256)) != 1L ||
-      length(unique(vapply(frames, nrow, integer(1L)))) != 1L ||
-      any(metadata$likelihood_family != row$likelihood_family[[1L]]) ||
-      any(metadata$arm_id != row$arm_id[[1L]])) stop("V8 incompatible MCMC chains cannot be scored together.", call. = FALSE)
+  app_joint_pht8_validate_chain_metadata(metadata,
+    row$likelihood_family[[1L]], row$arm_id[[1L]], length(frames))
+  if (length(unique(vapply(frames, nrow, integer(1L)))) != 1L) {
+    stop("V8 incompatible MCMC chains cannot be scored together.", call. = FALSE)
+  }
   beta <- do.call(rbind, lapply(frames, app_joint_recursive_select_block, block = "beta"))
   alpha <- do.call(rbind, lapply(frames, app_joint_recursive_select_block, block = "alpha"))
   chain_id <- rep(seq_along(frames), vapply(frames, nrow, integer(1L)))

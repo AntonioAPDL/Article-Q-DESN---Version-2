@@ -86,7 +86,7 @@ exal_sampler_hash <- app_joint_pht8_sampler_hash("exAL", ct)
 stopifnot(grepl("^[0-9a-f]{64}$", al_sampler_hash),
   grepl("^[0-9a-f]{64}$", exal_sampler_hash),
   al_sampler_hash != exal_sampler_hash,
-  grepl("stable-gaussian-m0", ct$execution_branch, fixed = TRUE))
+  grepl("adaptive-gaussian-m0", ct$execution_branch, fixed = TRUE))
 
 # Chain combination requires both posterior-target and effective-kernel identity.
 metadata <- data.frame(likelihood_family = rep("exAL", 3L),

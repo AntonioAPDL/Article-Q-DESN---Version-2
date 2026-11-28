@@ -1,7 +1,7 @@
 section,name,value,type,description
 identity,contract_version,joint_qdesn_persistent_tail_v8_joint_prior_calibration,character,Fixed-architecture joint anchor and innovation prior calibration.
 identity,run_tag,joint_qdesn_persistent_tail_v8_joint_prior_calibration_20261126,character,Ignored Jerez runtime tag.
-identity,execution_branch,work/joint-qdesn-persistent-tail-v11-stable-gaussian-m0-20261128,character,Dedicated stable Gaussian-kernel correction branch.
+identity,execution_branch,work/joint-qdesn-persistent-tail-v12-adaptive-gaussian-m0-20261128,character,Dedicated adaptive Gaussian-kernel correction branch.
 source,v7_parent_head,6aa48ea681df6fe2e32636fb70ed9ff5176085f3,character,Frozen V7 closeout parent.
 source,v6_decision_sha256,05be3d8d26ff11690ab400c07ce6c4fd88e33a30426a316bc4aa2afe90adb843,character,V6 final decision.
 source,v6_finalists_sha256,9cd8760a3708be2dab0e0b0d3cea67dce88b4f666de9241da05ef32751264c5c,character,V6 seven-level finalists.

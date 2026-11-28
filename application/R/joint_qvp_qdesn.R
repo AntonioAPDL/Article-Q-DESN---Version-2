@@ -12195,8 +12195,9 @@ app_joint_qvp_rtruncnorm_interval_stable <- function(
     stop("Interval-stable truncated-normal parameters are invalid.", call. = FALSE)
   }
   a <- (lower - mean) / sd
-  b <- (upper - mean) / sd
-  if (any(!is.finite(a)) || any(!is.finite(b)) || any(a >= b)) {
+  standardized_width <- (upper - lower) / sd
+  if (any(!is.finite(a)) || any(!is.finite(standardized_width)) ||
+      any(standardized_width <= 0)) {
     stop("Standardized bounded-normal intervals are invalid.", call. = FALSE)
   }
 
@@ -12204,12 +12205,19 @@ app_joint_qvp_rtruncnorm_interval_stable <- function(
     lambda <- if (a_i > 1.0e150) a_i + 1 / a_i else
       (a_i + sqrt(a_i * a_i + 4)) / 2
     delta <- 1 / lambda
-    proposal_mass <- -expm1(-lambda * width_i)
+    use_uniform <- lambda * width_i < 0.1
+    proposal_mass <- if (use_uniform) NA_real_ else -expm1(-lambda * width_i)
     for (proposal in seq_len(max_proposals)) {
-      excess <- -log1p(-stats::runif(1L) * proposal_mass) / lambda
+      excess <- if (use_uniform) width_i * stats::runif(1L) else
+        -log1p(-stats::runif(1L) * proposal_mass) / lambda
       value <- boundary + scale * excess
+      accepted <- if (use_uniform) {
+        log(stats::runif(1L)) <= -a_i * excess - 0.5 * excess^2
+      } else {
+        log(stats::runif(1L)) <= -0.5 * (excess - delta)^2
+      }
       if (excess > 0 && excess < width_i && value > boundary &&
-          log(stats::runif(1L)) <= -0.5 * (excess - delta)^2) {
+          accepted) {
         return(list(value = value, proposals = proposal))
       }
     }
@@ -12220,25 +12228,26 @@ app_joint_qvp_rtruncnorm_interval_stable <- function(
   proposal_count <- 0L
   for (i in seq_len(n)) {
     if (a[[i]] > 0) {
-      one <- draw_right_interval(a[[i]], b[[i]] - a[[i]], lower[[i]], sd[[i]])
+      one <- draw_right_interval(a[[i]], standardized_width[[i]], lower[[i]], sd[[i]])
       out[[i]] <- one$value
-    } else if (b[[i]] < 0) {
-      one <- draw_right_interval(-b[[i]], b[[i]] - a[[i]], -upper[[i]], sd[[i]])
+    } else if (a[[i]] < -standardized_width[[i]]) {
+      reflected_threshold <- -a[[i]] - standardized_width[[i]]
+      one <- draw_right_interval(reflected_threshold, standardized_width[[i]],
+        -upper[[i]], sd[[i]])
       out[[i]] <- -one$value
     } else {
-      mode <- min(max(0, a[[i]]), b[[i]])
       width <- upper[[i]] - lower[[i]]
       one <- NULL
       for (proposal in seq_len(max_proposals)) {
-        value <- if (b[[i]] - a[[i]] > 2) {
+        value <- if (standardized_width[[i]] > 2) {
           mean[[i]] + sd[[i]] * stats::rnorm(1L)
         } else {
           lower[[i]] + width * stats::runif(1L)
         }
         if (value <= lower[[i]] || value >= upper[[i]]) next
         z <- (value - mean[[i]]) / sd[[i]]
-        accepted <- if (b[[i]] - a[[i]] > 2) TRUE else
-          log(stats::runif(1L)) <= -0.5 * (z^2 - mode^2)
+        accepted <- if (standardized_width[[i]] > 2) TRUE else
+          log(stats::runif(1L)) <= -0.5 * z^2
         if (accepted) {
           one <- list(value = value, proposals = proposal)
           break
@@ -12255,7 +12264,8 @@ app_joint_qvp_rtruncnorm_interval_stable <- function(
     stop("Interval-stable truncated-normal output was not strictly interior.", call. = FALSE)
   }
   attr(out, "interval_proposal_count") <- as.integer(proposal_count)
-  attr(out, "max_standardized_interval_endpoint") <- max(abs(c(a, b)))
+  attr(out, "max_standardized_interval_endpoint") <-
+    max(abs(c(a, a + standardized_width)))
   out
 }
 

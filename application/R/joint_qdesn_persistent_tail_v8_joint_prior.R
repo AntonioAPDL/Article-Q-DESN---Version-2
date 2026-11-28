@@ -795,12 +795,15 @@ app_joint_pht8_sampler_hash <- function(family, contract) {
       likelihood_family = family, inference_method_id = contract$exal_method,
       latent_s_update = "normal_positive_support",
       truncated_normal_backend = "verified_truncnorm_with_exact_robert_tail_fallback_v1",
+      ordered_intercept_backend = "exact_tail_and_interval_rejection_v1",
       boundary_mapping = "lower_plus_sd_times_excess_no_clipping",
       sigma_support = "(0,Inf)")
   } else {
     list(version = "joint_qdesn_persistent_tail_v8_sampler_v2",
       likelihood_family = family, inference_method_id = "AL_latent_GIG_Gibbs",
-      scale_update = "positive_unbounded_exact_conditional", sigma_support = "(0,Inf)")
+      scale_update = "positive_unbounded_exact_conditional",
+      ordered_intercept_backend = "exact_tail_and_interval_rejection_v1",
+      sigma_support = "(0,Inf)")
   }
   digest::digest(fields, algo = "sha256")
 }

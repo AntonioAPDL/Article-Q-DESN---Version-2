@@ -78,4 +78,31 @@ stopifnot(abs(mean(sample) - expected_mean) < 0.003,
   abs(stats::var(sample) - expected_var) < 0.001,
   !any(sample == 0))
 
-cat("JOINT_EXAL_LATENT_SUPPORT_REDRAW_TEST_PASS expectations=26 production_runs=0\n")
+# Finite intervals use exact, strictly interior rejection in central and tail regimes.
+set.seed(20261201)
+right_interval <- app_joint_qvp_rtruncnorm_interval_stable(1000L,
+  mean = -100, sd = 1, lower = 0, upper = 0.01)
+set.seed(20261202)
+left_interval <- app_joint_qvp_rtruncnorm_interval_stable(1000L,
+  mean = 100, sd = 1, lower = -0.01, upper = 0)
+central_interval <- app_joint_qvp_rtruncnorm_interval_stable(1000L,
+  mean = 0, sd = 1, lower = -0.1, upper = 0.1)
+stopifnot(all(right_interval > 0 & right_interval < 0.01),
+  all(left_interval > -0.01 & left_interval < 0),
+  all(central_interval > -0.1 & central_interval < 0.1),
+  !any(right_interval %in% c(0, 0.01)))
+
+# Repeated ordered updates cannot create equal neighboring intercepts.
+set.seed(20261203)
+alpha <- c(-1, 0, 1)
+for (iteration in seq_len(10000L)) {
+  for (k in seq_along(alpha)) {
+    lower <- if (k == 1L) -Inf else alpha[[k - 1L]] + 1e-8
+    upper <- if (k == length(alpha)) Inf else alpha[[k + 1L]] - 1e-8
+    alpha[[k]] <- app_joint_qvp_rtruncnorm_ordered_stable(1L,
+      mean = (-2 + k), sd = 10, lower = lower, upper = upper)
+  }
+  stopifnot(all(diff(alpha) > 0))
+}
+
+cat("JOINT_EXAL_LATENT_SUPPORT_REDRAW_TEST_PASS expectations=32 production_runs=0\n")

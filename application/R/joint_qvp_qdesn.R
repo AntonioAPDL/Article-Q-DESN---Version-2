@@ -12172,6 +12172,124 @@ app_joint_qvp_rtruncnorm_tail_stable <- function(
   out
 }
 
+app_joint_qvp_rtruncnorm_interval_stable <- function(
+  n,
+  mean,
+  sd,
+  lower,
+  upper,
+  max_proposals = 10000L
+) {
+  n <- as.integer(n)[[1L]]
+  max_proposals <- as.integer(max_proposals)[[1L]]
+  if (is.na(n) || n < 0L || is.na(max_proposals) || max_proposals < 1L) {
+    stop("Interval-stable truncated-normal controls are invalid.", call. = FALSE)
+  }
+  if (n == 0L) return(numeric())
+  mean <- rep_len(as.numeric(mean), n)
+  sd <- rep_len(as.numeric(sd), n)
+  lower <- rep_len(as.numeric(lower), n)
+  upper <- rep_len(as.numeric(upper), n)
+  if (any(!is.finite(mean)) || any(!is.finite(sd)) || any(sd <= 0) ||
+      any(!is.finite(lower)) || any(!is.finite(upper)) || any(lower >= upper)) {
+    stop("Interval-stable truncated-normal parameters are invalid.", call. = FALSE)
+  }
+  a <- (lower - mean) / sd
+  b <- (upper - mean) / sd
+  if (any(!is.finite(a)) || any(!is.finite(b)) || any(a >= b)) {
+    stop("Standardized bounded-normal intervals are invalid.", call. = FALSE)
+  }
+
+  draw_right_interval <- function(a_i, width_i, boundary, scale) {
+    lambda <- if (a_i > 1.0e150) a_i + 1 / a_i else
+      (a_i + sqrt(a_i * a_i + 4)) / 2
+    delta <- 1 / lambda
+    proposal_mass <- -expm1(-lambda * width_i)
+    for (proposal in seq_len(max_proposals)) {
+      excess <- -log1p(-stats::runif(1L) * proposal_mass) / lambda
+      value <- boundary + scale * excess
+      if (excess > 0 && excess < width_i && value > boundary &&
+          log(stats::runif(1L)) <= -0.5 * (excess - delta)^2) {
+        return(list(value = value, proposals = proposal))
+      }
+    }
+    stop("Tail-interval exponential rejection exceeded its proposal limit.", call. = FALSE)
+  }
+
+  out <- numeric(n)
+  proposal_count <- 0L
+  for (i in seq_len(n)) {
+    if (a[[i]] > 0) {
+      one <- draw_right_interval(a[[i]], b[[i]] - a[[i]], lower[[i]], sd[[i]])
+      out[[i]] <- one$value
+    } else if (b[[i]] < 0) {
+      one <- draw_right_interval(-b[[i]], b[[i]] - a[[i]], -upper[[i]], sd[[i]])
+      out[[i]] <- -one$value
+    } else {
+      mode <- min(max(0, a[[i]]), b[[i]])
+      width <- upper[[i]] - lower[[i]]
+      one <- NULL
+      for (proposal in seq_len(max_proposals)) {
+        value <- lower[[i]] + width * stats::runif(1L)
+        if (value <= lower[[i]] || value >= upper[[i]]) next
+        z <- (value - mean[[i]]) / sd[[i]]
+        if (log(stats::runif(1L)) <= -0.5 * (z^2 - mode^2)) {
+          one <- list(value = value, proposals = proposal)
+          break
+        }
+      }
+      if (is.null(one)) {
+        stop("Central-interval rejection exceeded its proposal limit.", call. = FALSE)
+      }
+      out[[i]] <- one$value
+    }
+    proposal_count <- proposal_count + one$proposals
+  }
+  if (any(!is.finite(out)) || any(out <= lower) || any(out >= upper)) {
+    stop("Interval-stable truncated-normal output was not strictly interior.", call. = FALSE)
+  }
+  attr(out, "interval_proposal_count") <- as.integer(proposal_count)
+  attr(out, "max_standardized_interval_endpoint") <- max(abs(c(a, b)))
+  out
+}
+
+app_joint_qvp_rtruncnorm_ordered_stable <- function(
+  n,
+  mean,
+  sd,
+  lower = -Inf,
+  upper = Inf
+) {
+  n <- as.integer(n)[[1L]]
+  mean <- rep_len(as.numeric(mean), n)
+  sd <- rep_len(as.numeric(sd), n)
+  lower <- rep_len(as.numeric(lower), n)
+  upper <- rep_len(as.numeric(upper), n)
+  if (n == 0L) return(numeric())
+  out <- numeric(n)
+  unbounded <- is.infinite(lower) & lower < 0 & is.infinite(upper) & upper > 0
+  one_sided <- xor(is.finite(lower), is.finite(upper))
+  bounded <- is.finite(lower) & is.finite(upper)
+  if (any(!(unbounded | one_sided | bounded))) {
+    stop("Ordered truncated-normal bounds are invalid.", call. = FALSE)
+  }
+  if (any(unbounded)) {
+    out[unbounded] <- stats::rnorm(sum(unbounded), mean[unbounded], sd[unbounded])
+  }
+  if (any(one_sided)) {
+    out[one_sided] <- app_joint_qvp_rtruncnorm_tail_stable(sum(one_sided),
+      mean[one_sided], sd[one_sided], lower[one_sided], upper[one_sided])
+  }
+  if (any(bounded)) {
+    out[bounded] <- app_joint_qvp_rtruncnorm_interval_stable(sum(bounded),
+      mean[bounded], sd[bounded], lower[bounded], upper[bounded])
+  }
+  if (any(!is.finite(out)) || any(out <= lower) || any(out >= upper)) {
+    stop("Ordered truncated-normal output was not strictly inside its bounds.", call. = FALSE)
+  }
+  out
+}
+
 app_joint_qvp_rtruncnorm_support_safe <- function(
   n,
   mean,
@@ -13118,7 +13236,8 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
       lower <- if (k == 1L) -Inf else alpha[[k - 1L]] + alpha_min_spacing
       upper <- if (k == K) Inf else alpha[[k + 1L]] - alpha_min_spacing
       if (lower >= upper) stop("Ordered intercept bounds collapsed.", call. = FALSE)
-      alpha[[k]] <- app_joint_qvp_rtruncnorm(1, mean = mean, sd = sqrt(1 / prec), lower = lower, upper = upper)
+      alpha[[k]] <- app_joint_qvp_rtruncnorm_ordered_stable(1,
+        mean = mean, sd = sqrt(1 / prec), lower = lower, upper = upper)
     }
     fitted_no_alpha <- Z %*% beta_mat
     for (k in seq_len(K)) {
@@ -16381,7 +16500,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       lower <- if (k == 1L) -Inf else alpha[[k - 1L]] + alpha_min_spacing
       upper <- if (k == K) Inf else alpha[[k + 1L]] - alpha_min_spacing
       if (lower >= upper) stop("Ordered intercept bounds collapsed.", call. = FALSE)
-      alpha[[k]] <- app_joint_qvp_rtruncnorm(1, mean = mean, sd = sqrt(1 / prec), lower = lower, upper = upper)
+      alpha[[k]] <- app_joint_qvp_rtruncnorm_ordered_stable(1,
+        mean = mean, sd = sqrt(1 / prec), lower = lower, upper = upper)
 	    }
 	    fitted_no_alpha <- Z %*% beta_mat
 	    for (k in seq_len(K)) {

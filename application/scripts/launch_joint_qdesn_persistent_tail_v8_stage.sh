@@ -43,7 +43,7 @@ done
 [[ -z $(git status --porcelain) ]] || { echo "V8 execution worktree must be clean." >&2; exit 2; }
 branch=$(git branch --show-current)
 upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)
-[[ $branch == work/joint-qdesn-persistent-tail-v10-stable-ordered-m0-20261127 ]] || { echo "Unexpected V8 correction branch." >&2; exit 2; }
+[[ $branch == work/joint-qdesn-persistent-tail-v11-stable-gaussian-m0-20261128 ]] || { echo "Unexpected V8 correction branch." >&2; exit 2; }
 [[ -n $upstream && $(git rev-list --left-right --count "$upstream...HEAD") == $'0\t0' ]] || { echo "V8 branch is not synchronized." >&2; exit 2; }
 
 require_complete() {

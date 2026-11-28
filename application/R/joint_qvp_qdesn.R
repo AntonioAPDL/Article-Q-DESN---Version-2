@@ -12230,10 +12230,16 @@ app_joint_qvp_rtruncnorm_interval_stable <- function(
       width <- upper[[i]] - lower[[i]]
       one <- NULL
       for (proposal in seq_len(max_proposals)) {
-        value <- lower[[i]] + width * stats::runif(1L)
+        value <- if (b[[i]] - a[[i]] > 2) {
+          mean[[i]] + sd[[i]] * stats::rnorm(1L)
+        } else {
+          lower[[i]] + width * stats::runif(1L)
+        }
         if (value <= lower[[i]] || value >= upper[[i]]) next
         z <- (value - mean[[i]]) / sd[[i]]
-        if (log(stats::runif(1L)) <= -0.5 * (z^2 - mode^2)) {
+        accepted <- if (b[[i]] - a[[i]] > 2) TRUE else
+          log(stats::runif(1L)) <= -0.5 * (z^2 - mode^2)
+        if (accepted) {
           one <- list(value = value, proposals = proposal)
           break
         }
